@@ -1,0 +1,500 @@
+---
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { Marp } from '@marp-team/marp-core';
+import '../../styles/slides.css';
+
+type DeckMeta = { title: string; description?: string };
+type Slide = { html: string; notes: string; label: string };
+
+function parseScalar(value = '') {
+  return value.trim().replace(/^['"]|['"]$/g, '');
+}
+
+function parseDeck(source: string): { meta: DeckMeta; slides: Slide[]; css: string } {
+  const frontmatter = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+  const meta: DeckMeta = { title: 'Pravartak slides' };
+
+  if (frontmatter) {
+    for (const line of frontmatter[1].split(/\r?\n/)) {
+      const separator = line.indexOf(':');
+      if (separator < 0) continue;
+      const key = line.slice(0, separator).trim() as keyof DeckMeta;
+      if (['title', 'description'].includes(key)) {
+        meta[key] = parseScalar(line.slice(separator + 1));
+      }
+    }
+  }
+
+  const marp = new Marp({ html: true, inlineSVG: false, printable: true });
+  const rendered = marp.render(source, { htmlAsArray: true });
+  const slides = rendered.html.map((html, index) => {
+    const heading = html.match(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i)?.[1] || `Slide ${index + 1}`;
+    const label = heading.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim();
+    const notes = (rendered.comments[index] || [])
+      .map((comment) => comment.replace(/^\s*notes\s*/i, '').trim())
+      .filter(Boolean)
+      .join('\n\n');
+    return { html, notes, label };
+  });
+
+  return { meta, slides, css: rendered.css };
+}
+
+export function getStaticPaths() {
+  const deckFiles = import.meta.glob('../../content/slides/**/*.md', {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  }) as Record<string, string>;
+  return Object.entries(deckFiles).map(([path, source]) => {
+    const slug = path.split('/slides/')[1].replace(/\.md$/, '');
+    return { params: { slug }, props: { source, slug } };
+  });
+}
+
+const { source, slug } = Astro.props as { source: string; slug: string };
+const { meta, slides, css: marpCss } = parseDeck(source);
+const base = import.meta.env.BASE_URL;
+const deckId = `pravartak:${slug}`;
+const hasPdf = existsSync(join(process.cwd(), 'public', 'slides', `${slug}.pdf`));
+const pdfUrl = `${base}slides/${slug}.pdf`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#07111f" />
+    <meta name="description" content={meta.description || meta.title} />
+    <link rel="icon" href={`${base}favicon.svg`} />
+    <title>{meta.title} · Pravartak slides</title>
+    <style set:html={marpCss} />
+  </head>
+  <body>
+    <main class="deck-shell" data-deck-id={deckId} data-slide-count={slides.length}>
+      <header class="deck-header">
+        <a class="deck-brand" href={base} aria-label="Back to Pravartak home">
+          <span aria-hidden="true">P</span>
+          <span>Pravartak</span>
+        </a>
+        <div class="deck-title"><strong>{meta.title}</strong></div>
+        <div class="header-actions">
+          <button type="button" data-action="notes" aria-pressed="false" title="Notes (N)">Notes</button>
+          {hasPdf && <a class="button-link" href={pdfUrl} download>PDF</a>}
+          <button class="present-button" type="button" data-action="fullscreen" title="Present (F)">Present</button>
+          <button type="button" data-action="help" title="Keyboard shortcuts">?</button>
+        </div>
+      </header>
+
+      <div class="deck-stage-wrap">
+        <div class="deck-stage" tabindex="0" aria-label={`Slide deck: ${meta.title}`}>
+          {slides.map((slide, index) => (
+            <section
+              class="deck-slide"
+              data-slide={index}
+              aria-label={`${index + 1} of ${slides.length}: ${slide.label}`}
+              aria-hidden={index === 0 ? 'false' : 'true'}
+            >
+              <div class="marpit" set:html={slide.html} />
+              <canvas class="annotation-canvas" data-canvas={index} aria-label={`Annotations for slide ${index + 1}`} />
+              <span class="laser-pointer" aria-hidden="true"></span>
+              <aside class="speaker-notes">
+                <strong>Notes</strong>
+                <p>{slide.notes || 'No notes for this slide.'}</p>
+              </aside>
+            </section>
+          ))}
+        </div>
+      </div>
+
+      <footer class="deck-footer">
+        <div class="nav-controls">
+          <button type="button" data-action="previous" aria-label="Previous slide">←</button>
+          <span class="slide-counter" aria-live="polite"><strong>1</strong> / {slides.length}</span>
+          <button type="button" data-action="next" aria-label="Next slide">→</button>
+        </div>
+        <div class="progress-track" aria-hidden="true"><span></span></div>
+        <div class="annotation-actions">
+          <button class="annotate-toggle" type="button" data-action="annotate" aria-pressed="false">Tools <kbd>A</kbd></button>
+        </div>
+      </footer>
+
+      <div class="drawing-toolbar" aria-label="Annotation tools" hidden>
+        <div class="tool-group" aria-label="Drawing tool">
+          <button type="button" data-tool="laser" class="is-active" aria-pressed="true">Laser</button>
+          <button type="button" data-tool="pen" aria-pressed="false">Pen</button>
+          <button type="button" data-tool="highlighter" aria-pressed="false">Highlight</button>
+          <button type="button" data-tool="eraser" aria-pressed="false">Erase</button>
+        </div>
+        <div class="stroke-controls">
+          <label>Size
+            <select class="stroke-size">
+              <option value="3">Fine</option>
+              <option value="6" selected>Medium</option>
+              <option value="12">Thick</option>
+            </select>
+          </label>
+          <div class="color-group" aria-label="Stroke color">
+            <button class="color-dot is-active" type="button" data-color="#ff5364" style="--swatch:#ff5364" aria-label="Red" aria-pressed="true"></button>
+            <button class="color-dot" type="button" data-color="#4da3ff" style="--swatch:#4da3ff" aria-label="Blue" aria-pressed="false"></button>
+            <button class="color-dot" type="button" data-color="#ffcf4a" style="--swatch:#ffcf4a" aria-label="Yellow" aria-pressed="false"></button>
+            <input class="custom-color" type="color" value="#ff5364" aria-label="Custom stroke color" />
+          </div>
+        </div>
+        <div class="tool-group" aria-label="Edit annotations">
+          <button type="button" data-action="undo" title="Undo (Ctrl+Z)">Undo</button>
+          <button type="button" data-action="redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+          <button type="button" data-action="clear">Clear slide</button>
+          <button type="button" data-action="export">Save</button>
+          <button type="button" data-action="import">Load</button>
+          <input class="import-input" type="file" accept="application/json,.json" hidden />
+        </div>
+      </div>
+
+      <dialog class="help-dialog">
+        <div class="dialog-heading"><strong>Slide controls</strong><button type="button" data-action="close-help" aria-label="Close help">×</button></div>
+        <dl>
+          <div><dt>Next / previous</dt><dd><kbd>→</kbd> <kbd>←</kbd></dd></div>
+          <div><dt>First / last</dt><dd><kbd>Home</kbd> <kbd>End</kbd></dd></div>
+          <div><dt>Drawing tools</dt><dd><kbd>A</kbd></dd></div>
+          <div><dt>Laser pointer</dt><dd><kbd>L</kbd></dd></div>
+          <div><dt>Notes</dt><dd><kbd>N</kbd></dd></div>
+          <div><dt>Present</dt><dd><kbd>F</kbd></dd></div>
+          <div><dt>Undo / redo</dt><dd><kbd>Ctrl Z</kbd> <kbd>Ctrl Shift Z</kbd></dd></div>
+        </dl>
+        <p>Annotations autosave only in this browser. Export JSON for a portable backup.</p>
+      </dialog>
+
+      <div class="deck-toast" role="status" aria-live="polite"></div>
+    </main>
+
+    <script>
+      // @ts-nocheck -- Browser-native module; all imported data is validated at runtime.
+      const root = document.querySelector('.deck-shell');
+      if (!(root instanceof HTMLElement)) throw new Error('Slide deck root is missing.');
+
+      const slides = [...root.querySelectorAll('.deck-slide')];
+      const canvases = [...root.querySelectorAll('.annotation-canvas')];
+      const lasers = [...root.querySelectorAll('.laser-pointer')];
+      const stage = root.querySelector('.deck-stage');
+      const counter = root.querySelector('.slide-counter strong');
+      const progress = root.querySelector('.progress-track span');
+      const toolbar = root.querySelector('.drawing-toolbar');
+      const toast = root.querySelector('.deck-toast');
+      const importInput = root.querySelector('.import-input');
+      const help = root.querySelector('.help-dialog');
+      const storageKey = `${root.dataset.deckId}:annotations:v1`;
+      const state = { index: 0, drawing: false, tool: 'laser', color: '#ff5364', width: 6, strokes: {}, redo: {} };
+      let currentStroke = null;
+      let swipeStart = null;
+      let toastTimer;
+      let laserTimer;
+
+      const showToast = (message) => {
+        if (!(toast instanceof HTMLElement)) return;
+        toast.textContent = message;
+        toast.classList.add('is-visible');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 2400);
+      };
+
+      const getSlideStrokes = (index = state.index) => {
+        const key = String(index);
+        if (!Array.isArray(state.strokes[key])) state.strokes[key] = [];
+        return state.strokes[key];
+      };
+
+      const getRedoStrokes = (index = state.index) => {
+        const key = String(index);
+        if (!Array.isArray(state.redo[key])) state.redo[key] = [];
+        return state.redo[key];
+      };
+
+      const validPoint = (point) => point && Number.isFinite(point.x) && Number.isFinite(point.y) && point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1;
+      const normalizeImport = (input) => {
+        if (!input || typeof input !== 'object' || !input.slides || typeof input.slides !== 'object') throw new Error('Invalid annotation file.');
+        const output = {};
+        for (const [key, list] of Object.entries(input.slides)) {
+          const index = Number(key);
+          if (!Number.isInteger(index) || index < 0 || index >= slides.length || !Array.isArray(list)) continue;
+          output[key] = list.slice(0, 5000).filter((stroke) => {
+            return stroke && ['pen', 'highlighter', 'eraser'].includes(stroke.tool) &&
+              typeof stroke.color === 'string' && Number.isFinite(stroke.width) &&
+              Array.isArray(stroke.points) && stroke.points.length <= 20000 && stroke.points.every(validPoint);
+          });
+        }
+        return output;
+      };
+
+      const save = () => {
+        try {
+          localStorage.setItem(storageKey, JSON.stringify({ version: 1, deckId: root.dataset.deckId, slides: state.strokes }));
+        } catch { showToast('Browser storage is unavailable. Export to keep your work.'); }
+      };
+
+      const loadSaved = () => {
+        try {
+          const value = localStorage.getItem(storageKey);
+          if (value) state.strokes = normalizeImport(JSON.parse(value));
+        } catch {
+          localStorage.removeItem(storageKey);
+          showToast('A damaged autosave was ignored.');
+        }
+      };
+
+      const canvasContext = (canvas) => {
+        if (!(canvas instanceof HTMLCanvasElement)) return null;
+        return canvas.getContext('2d');
+      };
+
+      const drawStroke = (ctx, stroke, width, height) => {
+        if (!stroke.points.length) return;
+        ctx.save();
+        ctx.globalCompositeOperation = stroke.tool === 'eraser' ? 'destination-out' : 'source-over';
+        ctx.globalAlpha = stroke.tool === 'highlighter' ? 0.32 : 1;
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = stroke.width * Math.min(width, height) / 720;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        stroke.points.forEach((point, index) => {
+          const x = point.x * width;
+          const y = point.y * height;
+          if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        if (stroke.points.length === 1) {
+          const point = stroke.points[0];
+          ctx.lineTo(point.x * width + 0.01, point.y * height + 0.01);
+        }
+        ctx.stroke();
+        ctx.restore();
+      };
+
+      const redraw = (index) => {
+        const canvas = canvases[index];
+        const ctx = canvasContext(canvas);
+        if (!(canvas instanceof HTMLCanvasElement) || !ctx) return;
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        ctx.setTransform(canvas.width / Math.max(width, 1), 0, 0, canvas.height / Math.max(height, 1), 0, 0);
+        ctx.clearRect(0, 0, width, height);
+        for (const stroke of getSlideStrokes(index)) drawStroke(ctx, stroke, width, height);
+      };
+
+      const fitActiveSlide = () => {
+        const marpit = slides[state.index]?.querySelector('.marpit');
+        const page = marpit?.querySelector(':scope > section');
+        if (!(marpit instanceof HTMLElement) || !(page instanceof HTMLElement) || !(stage instanceof HTMLElement)) return;
+        const width = page.offsetWidth || 1280;
+        const height = page.offsetHeight || 720;
+        const scale = Math.min(stage.clientWidth / width, stage.clientHeight / height);
+        marpit.style.width = `${width}px`;
+        marpit.style.height = `${height}px`;
+        marpit.style.transform = `translate(-50%, -50%) scale(${scale})`;
+      };
+
+      const resizeCanvases = () => {
+        fitActiveSlide();
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        canvases.forEach((canvas, index) => {
+          if (!(canvas instanceof HTMLCanvasElement)) return;
+          if (!canvas.clientWidth || !canvas.clientHeight) return;
+          const width = Math.max(1, Math.round(canvas.clientWidth * ratio));
+          const height = Math.max(1, Math.round(canvas.clientHeight * ratio));
+          if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width;
+            canvas.height = height;
+          }
+          redraw(index);
+        });
+      };
+
+      const goTo = (index) => {
+        state.index = Math.max(0, Math.min(slides.length - 1, index));
+        slides.forEach((slide, slideIndex) => {
+          const active = slideIndex === state.index;
+          slide.classList.toggle('is-active', active);
+          slide.setAttribute('aria-hidden', String(!active));
+        });
+        if (counter) counter.textContent = String(state.index + 1);
+        if (progress instanceof HTMLElement) progress.style.width = `${((state.index + 1) / slides.length) * 100}%`;
+        root.querySelector('[data-action="previous"]')?.toggleAttribute('disabled', state.index === 0);
+        root.querySelector('[data-action="next"]')?.toggleAttribute('disabled', state.index === slides.length - 1);
+        lasers.forEach((laser) => laser.classList.remove('is-visible'));
+        requestAnimationFrame(resizeCanvases);
+      };
+
+      const setDrawing = (enabled) => {
+        state.drawing = enabled;
+        root.classList.toggle('is-annotating', enabled);
+        if (toolbar instanceof HTMLElement) toolbar.hidden = !enabled;
+        const button = root.querySelector('[data-action="annotate"]');
+        button?.setAttribute('aria-pressed', String(enabled));
+        showToast(enabled ? 'Slide tools on' : 'Slide tools off');
+      };
+
+      const pointFromEvent = (canvas, event) => {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
+          y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
+        };
+      };
+
+      canvases.forEach((canvas, index) => {
+        if (!(canvas instanceof HTMLCanvasElement)) return;
+        canvas.addEventListener('pointerdown', (event) => {
+          if (!state.drawing || index !== state.index || event.button > 0) return;
+          event.preventDefault();
+          if (state.tool === 'laser') return;
+          canvas.setPointerCapture(event.pointerId);
+          currentStroke = { tool: state.tool, color: state.color, width: state.width, points: [pointFromEvent(canvas, event)] };
+          getSlideStrokes().push(currentStroke);
+          state.redo[String(state.index)] = [];
+          redraw(state.index);
+        });
+        canvas.addEventListener('pointermove', (event) => {
+          if (state.drawing && state.tool === 'laser' && index === state.index) {
+            const laser = lasers[index];
+            if (laser instanceof HTMLElement) {
+              const rect = canvas.getBoundingClientRect();
+              laser.style.left = `${event.clientX - rect.left}px`;
+              laser.style.top = `${event.clientY - rect.top}px`;
+              laser.classList.add('is-visible');
+              clearTimeout(laserTimer);
+              laserTimer = setTimeout(() => laser.classList.remove('is-visible'), 700);
+            }
+            return;
+          }
+          if (!currentStroke || !canvas.hasPointerCapture(event.pointerId)) return;
+          const point = pointFromEvent(canvas, event);
+          const last = currentStroke.points[currentStroke.points.length - 1];
+          if (Math.hypot(point.x - last.x, point.y - last.y) > 0.0015) currentStroke.points.push(point);
+          redraw(state.index);
+        });
+        const finishStroke = (event) => {
+          if (!currentStroke) return;
+          if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+          currentStroke = null;
+          save();
+        };
+        canvas.addEventListener('pointerup', finishStroke);
+        canvas.addEventListener('pointercancel', finishStroke);
+        canvas.addEventListener('pointerleave', () => lasers[index]?.classList.remove('is-visible'));
+      });
+
+      const undo = () => {
+        const strokes = getSlideStrokes();
+        const stroke = strokes.pop();
+        if (stroke) { getRedoStrokes().push(stroke); redraw(state.index); save(); }
+      };
+      const redo = () => {
+        const stroke = getRedoStrokes().pop();
+        if (stroke) { getSlideStrokes().push(stroke); redraw(state.index); save(); }
+      };
+
+      root.addEventListener('click', async (event) => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        const action = button.dataset.action;
+        if (action === 'previous') goTo(state.index - 1);
+        if (action === 'next') goTo(state.index + 1);
+        if (action === 'annotate') setDrawing(!state.drawing);
+        if (action === 'notes') {
+          const visible = !root.classList.contains('show-notes');
+          root.classList.toggle('show-notes', visible);
+          button.setAttribute('aria-pressed', String(visible));
+        }
+        if (action === 'fullscreen') {
+          if (!document.fullscreenElement) await root.requestFullscreen?.(); else await document.exitFullscreen?.();
+        }
+        if (action === 'help' && help instanceof HTMLDialogElement) help.showModal();
+        if (action === 'close-help' && help instanceof HTMLDialogElement) help.close();
+        if (action === 'undo') undo();
+        if (action === 'redo') redo();
+        if (action === 'clear' && getSlideStrokes().length && confirm('Clear annotations on this slide?')) {
+          state.redo[String(state.index)] = [...getSlideStrokes()];
+          state.strokes[String(state.index)] = [];
+          redraw(state.index); save(); showToast('Slide annotations cleared');
+        }
+        if (action === 'export') {
+          const data = JSON.stringify({ version: 1, deckId: root.dataset.deckId, exportedAt: new Date().toISOString(), slides: state.strokes }, null, 2);
+          const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+          const link = document.createElement('a');
+          link.href = url; link.download = `${root.dataset.deckId?.split(':').pop() || 'deck'}-annotations.json`; link.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          showToast('Annotation backup exported');
+        }
+        if (action === 'import' && importInput instanceof HTMLInputElement) importInput.click();
+        if (button.dataset.tool) {
+          state.tool = button.dataset.tool;
+          root.dataset.tool = state.tool;
+          lasers.forEach((laser) => laser.classList.remove('is-visible'));
+          root.querySelectorAll('[data-tool]').forEach((item) => {
+            const active = item === button; item.classList.toggle('is-active', active); item.setAttribute('aria-pressed', String(active));
+          });
+        }
+        if (button.dataset.color) {
+          state.color = button.dataset.color;
+          const colorInput = root.querySelector('.custom-color'); if (colorInput instanceof HTMLInputElement) colorInput.value = state.color;
+          root.querySelectorAll('[data-color]').forEach((item) => { const active = item === button; item.classList.toggle('is-active', active); item.setAttribute('aria-pressed', String(active)); });
+        }
+      });
+
+      root.querySelector('.stroke-size')?.addEventListener('change', (event) => { state.width = Number(event.target.value); });
+      root.querySelector('.custom-color')?.addEventListener('input', (event) => {
+        state.color = event.target.value;
+        root.querySelectorAll('[data-color]').forEach((item) => { item.classList.remove('is-active'); item.setAttribute('aria-pressed', 'false'); });
+      });
+      importInput?.addEventListener('change', async () => {
+        const file = importInput.files?.[0];
+        if (!file) return;
+        try {
+          if (file.size > 5_000_000) throw new Error('File is too large.');
+          state.strokes = normalizeImport(JSON.parse(await file.text()));
+          state.redo = {}; resizeCanvases(); save(); showToast('Annotations imported');
+        } catch (error) { showToast(error instanceof Error ? error.message : 'Could not import annotations.'); }
+        importInput.value = '';
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (help instanceof HTMLDialogElement && help.open) return;
+        if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
+        const key = event.key.toLowerCase();
+        if (['arrowright', 'pagedown', ' '].includes(key)) { event.preventDefault(); goTo(state.index + 1); }
+        if (['arrowleft', 'pageup'].includes(key)) { event.preventDefault(); goTo(state.index - 1); }
+        if (key === 'home') goTo(0);
+        if (key === 'end') goTo(slides.length - 1);
+        if (key === 'a') setDrawing(!state.drawing);
+        if (key === 'l') {
+          if (!state.drawing) setDrawing(true);
+          root.querySelector('[data-tool="laser"]')?.click();
+        }
+        if (key === 'n') root.querySelector('[data-action="notes"]')?.click();
+        if (key === 'f') root.querySelector('[data-action="fullscreen"]')?.click();
+        if ((event.ctrlKey || event.metaKey) && key === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); }
+      });
+
+      stage?.addEventListener('pointerdown', (event) => { if (!state.drawing) swipeStart = { x: event.clientX, y: event.clientY }; });
+      stage?.addEventListener('pointerup', (event) => {
+        if (!swipeStart || state.drawing) return;
+        const dx = event.clientX - swipeStart.x; const dy = event.clientY - swipeStart.y; swipeStart = null;
+        if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)) goTo(state.index + (dx < 0 ? 1 : -1));
+      });
+      document.addEventListener('fullscreenchange', () => {
+        const button = root.querySelector('[data-action="fullscreen"]');
+        if (button) button.textContent = document.fullscreenElement ? 'Exit' : 'Present';
+        setTimeout(resizeCanvases, 80);
+      });
+
+      loadSaved();
+      root.dataset.tool = state.tool;
+      slides[0]?.classList.add('is-active');
+      goTo(0);
+      new ResizeObserver(resizeCanvases).observe(stage);
+      resizeCanvases();
+    </script>
+  </body>
+</html>

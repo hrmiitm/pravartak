@@ -1,0 +1,26 @@
+{
+  "name": "pravartak-learning-platform",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "ASTRO_TELEMETRY_DISABLED=1 astro dev",
+    "build": "ASTRO_TELEMETRY_DISABLED=1 astro check && ASTRO_TELEMETRY_DISABLED=1 astro build",
+    "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview",
+    "check": "ASTRO_TELEMETRY_DISABLED=1 astro check",
+    "slides:pdf": "marp --input-dir src/content/slides --output public/slides --pdf --pdf-outlines"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.41.3",
+    "@marp-team/marp-core": "^4.3.1",
+    "astro": "^7.0.7"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.9",
+    "@marp-team/marp-cli": "^4.4.1",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
