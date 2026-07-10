@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "husky"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.41.3",
@@ -25,6 +26,7 @@
     "@marp-team/marp-cli": "^4.4.1",
     "eslint": "^10.6.0",
     "eslint-plugin-astro": "^2.1.1",
+    "husky": "^9.1.7",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.63.0",
     "vitest": "^4.1.10"
