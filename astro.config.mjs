@@ -4,8 +4,12 @@ import starlight from '@astrojs/starlight';
 const base = process.env.BASE_PATH || '/';
 const normalizedBase = base === '/' ? '/' : `/${base.replace(/^\/+|\/+$/g, '')}`;
 
+const defaultSite = process.env.CF_PAGES === '1'
+  ? 'https://pravartak.pages.dev'
+  : 'https://example.com';
+
 export default defineConfig({
-  site: process.env.SITE_URL || 'https://example.com',
+  site: process.env.SITE_URL || defaultSite,
   base: normalizedBase,
   output: 'static',
   trailingSlash: 'always',
