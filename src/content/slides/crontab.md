@@ -9,22 +9,62 @@ paginate: true
 
 # Crontab basics
 
-Run a command at a chosen time.
+From first schedule to reliable background jobs.
 
 ---
 
-## The cron format
+## What cron does
 
 ```text
-minute hour day month weekday command
-0      9    *   *     1-5     /app/report.sh
+Your script → cron schedule → command runs → log file → you verify
+```
+
+- Good for reports, cleanup, backups, and checks
+- Run scripts manually before scheduling them
+- Use logs so failures are visible
+
+---
+
+## Manage your schedule
+
+```bash
+crontab -e       # edit jobs
+crontab -l       # list jobs
+crontab -r       # remove every job — careful
+```
+
+Use `crontab -l` after every edit.
+
+---
+
+## Read the five time fields
+
+```text
+minute  hour  day-of-month  month  day-of-week  command
+0       9     *             *      1-5          /app/report.sh
 ```
 
 Runs at 9 AM, Monday to Friday.
 
 ---
 
-## Start safely
+## Build schedules with symbols
+
+```text
+*       every value       */15    every 15 values
+,       list              1,15    first and fifteenth
+-       range             MON-FRI weekdays
+/       step              9-17/2  every two hours from 9 to 17
+```
+
+```text
+*/15 * * * * /app/check.sh       # every 15 minutes
+@daily /app/backup.sh             # once a day
+```
+
+---
+
+## Make a job reliable
 
 1. Run the script yourself.
 2. Add it with `crontab -e`.
@@ -34,3 +74,19 @@ Runs at 9 AM, Monday to Friday.
 ```text
 0 9 * * 1-5 /app/report.sh >> /app/report.log 2>&1
 ```
+
+`>>` appends output. `2>&1` adds errors to the same log.
+
+---
+
+## Debug and protect
+
+```bash
+systemctl status cron
+journalctl -u cron --since today
+```
+
+- Cron has a minimal environment: set `PATH` or use absolute paths
+- Keep secrets out of crontab lines
+- Use `flock` when two runs must not overlap
+- A retry-safe job should not create duplicate work
