@@ -9,6 +9,11 @@ sidebar:
 
 Hugging Face Spaces are Git repositories that host small demos. A Space rebuilds when you push a commit. FastAPI works in a **Docker Space**, where you provide the application and its Dockerfile.
 
+<div class="slide-cta">
+  <p><strong>Review with slides</strong><br/><small>7 slides · drawing tools · PDF</small></p>
+  <a href="../../slides/huggingface-spaces/">Open slide deck →</a>
+</div>
+
 ## 1. Choose the right Space type
 
 | Type | Best for | Do you write a Dockerfile? |

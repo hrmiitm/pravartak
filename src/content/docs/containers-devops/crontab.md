@@ -9,6 +9,11 @@ sidebar:
 
 **Cron** is a Linux service that runs commands on a schedule. A **crontab** is the schedule file for one user. It is useful for reports, cleanup jobs, backups, and small health checks.
 
+<div class="slide-cta">
+  <p><strong>Review with slides</strong><br/><small>7 slides · drawing tools · PDF</small></p>
+  <a href="../../slides/crontab/">Open slide deck →</a>
+</div>
+
 ## 1. Learn the crontab commands
 
 Run these commands as the user who should own the job:

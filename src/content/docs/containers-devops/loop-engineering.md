@@ -9,6 +9,11 @@ sidebar:
 
 Loop engineering means working in a short cycle: **understand → change → check → observe → learn → repeat**. It turns vague work such as “make it better” into small decisions supported by evidence.
 
+<div class="slide-cta">
+  <p><strong>Review with slides</strong><br/><small>6 slides · drawing tools · PDF</small></p>
+  <a href="../../slides/loop-engineering/">Open slide deck →</a>
+</div>
+
 ## 1. Start with one outcome
 
 Do not start by changing five things. Start with one statement you can check:

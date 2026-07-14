@@ -9,6 +9,11 @@ sidebar:
 
 **Continuous integration (CI)** runs checks when code changes. **Continuous delivery/deployment (CD)** releases a version only after those checks pass. GitHub Actions stores workflows as YAML files in `.github/workflows/`.
 
+<div class="slide-cta">
+  <p><strong>Review with slides</strong><br/><small>7 slides · drawing tools · PDF</small></p>
+  <a href="../../slides/github-actions-ci-cd/">Open slide deck →</a>
+</div>
+
 ## 1. See the delivery path
 
 1. Create a branch and make a change.
