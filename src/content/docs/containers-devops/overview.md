@@ -10,7 +10,6 @@ sidebar:
 Learn one small idea at a time, then practise it locally.
 
 - **Crontab** — run a command on a schedule.
-- **LXD sandboxing** — run and limit a disposable Linux container.
 - **Loop engineering** — improve software through small, measured changes.
 - **GitHub Actions CI/CD** — check code automatically before deployment.
 - **Hugging Face Spaces** — publish a small FastAPI demo.

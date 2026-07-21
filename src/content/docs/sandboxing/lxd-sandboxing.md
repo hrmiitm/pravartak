@@ -11,7 +11,7 @@ sidebar:
 
 <div class="slide-cta">
   <p><strong>Review with slides</strong><br/><small>9 slides · drawing tools · PDF</small></p>
-  <a href="../../slides/lxd-sandboxing/">Open slide deck →</a>
+  <a href="../../slides/sandboxing/lxd-sandboxing/">Open slide deck →</a>
 </div>
 
 ## 1. Choose Docker or LXD
@@ -204,4 +204,4 @@ lxc delete ai-lab --force
 
 [Read the official Claude Code installation guide](https://code.claude.com/docs/en/installation)
 
-[Open the LXD sandboxing slides](../../slides/lxd-sandboxing/)
+[Open the LXD sandboxing slides](../../slides/sandboxing/lxd-sandboxing/)
