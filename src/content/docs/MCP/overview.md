@@ -10,7 +10,7 @@ sidebar:
 **MCP is a common way for an AI application to discover and use external capabilities.** It gives an AI host a consistent connection to tools, data, and reusable prompts instead of requiring a custom integration for every system.
 
 <div class="slide-cta">
-  <p><strong>Review with slides</strong><br/><small>10 slides · diagrams · Q&amp;A · runnable demo</small></p>
+  <p><strong>Review with slides</strong><br/><small>10 slides · diagrams · Q&amp;A · chatbot demo</small></p>
   <a href="../../slides/mcp/">Open slide deck →</a>
 </div>
 
@@ -131,6 +131,115 @@ Open the Inspector URL it prints, connect to `http://localhost:8000/mcp`, list t
 
 For a local-only integration, `stdio` is also common: the AI host starts the server as a subprocess. Never send normal logs to stdout in that mode—stdout carries protocol messages; log to stderr instead.
 
+## Connect a chatbot: direct function first
+
+The same `percentage` capability can be attached directly to a chatbot. Add the Agents SDK and set an API key:
+
+```bash
+uv add openai-agents
+export OPENAI_API_KEY="your-api-key"
+```
+
+Create `direct_chatbot.py`:
+
+```python
+import asyncio
+
+from agents import Agent, Runner, function_tool
+
+
+@function_tool
+def percentage(obtained: float, total: float) -> dict:
+    """Calculate a student's percentage and grade category."""
+    if not 0 <= obtained <= total or total <= 0:
+        raise ValueError("Marks must satisfy 0 <= obtained <= total.")
+    score = round(obtained / total * 100, 2)
+    grade = "Excellent" if score >= 90 else "Very Good" if score >= 75 else "Good" if score >= 60 else "Pass" if score >= 40 else "Fail"
+    return {"percentage": score, "grade": grade}
+
+
+async def main() -> None:
+    agent = Agent(
+        name="Student Assistant",
+        instructions="Use the percentage tool whenever a student provides marks.",
+        tools=[percentage],
+    )
+    question = input("You: ")
+    result = await Runner.run(agent, question)
+    print("Assistant:", result.final_output)
+
+
+asyncio.run(main())
+```
+
+Run it with `uv run python direct_chatbot.py`, then ask: `I obtained 425 out of 500. What is my percentage and grade?`
+
+```text
+User → model → directly imported Python function → model → reply
+```
+
+The chatbot and tool are tightly coupled: this application imports, describes, and executes the function itself.
+
+## Connect the same chatbot through MCP
+
+Keep `server.py` running locally, then create `mcp_chatbot.py`:
+
+```python
+import asyncio
+
+from agents import Agent, Runner
+from agents.mcp import MCPServerStreamableHttp
+
+
+async def main() -> None:
+    async with MCPServerStreamableHttp(
+        name="Student Tools",
+        params={"url": "http://127.0.0.1:8000/mcp"},
+        cache_tools_list=True,
+    ) as server:
+        agent = Agent(
+            name="Student Assistant",
+            instructions="Use the Student Tools MCP server whenever a student provides marks.",
+            mcp_servers=[server],
+        )
+        question = input("You: ")
+        result = await Runner.run(agent, question)
+        print("Assistant:", result.final_output)
+
+
+asyncio.run(main())
+```
+
+Run the two processes in separate terminals:
+
+```bash
+# Terminal 1: the locally running MCP server
+uv run python server.py
+
+# Terminal 2: the chatbot host
+uv run python mcp_chatbot.py
+```
+
+Ask the same marks question. The chatbot connects to the local endpoint, lists the available MCP tools and their schemas, gives those tools to the model, and sends the selected call back through the MCP server.
+
+```text
+User → model → chatbot's MCP client → http://127.0.0.1:8000/mcp → percentage() → model → reply
+```
+
+The chatbot never imports `percentage()`. It can swap to another compatible server, or another AI host can reuse this server, without copying the tool implementation.
+
+## Direct function or MCP server?
+
+| Question | Direct function tool | MCP server |
+| --- | --- | --- |
+| Where does the implementation live? | Inside the chatbot process | In a separate server process |
+| How does the host obtain the tool? | `tools=[percentage]` | Lists tools through MCP |
+| How is the tool called? | Normal in-process Python call | JSON-RPC over `stdio` or HTTP |
+| Best first use | One small, private capability | A reusable integration or separate trust boundary |
+| Can another compatible host reuse it? | Only by importing its code | Yes, by connecting to the server |
+
+Both examples still use **tool calling**: the model chooses the tool and arguments. MCP changes the boundary and the protocol used to discover and execute that tool.
+
 ## Design safely
 
 - Treat tool descriptions and model output as untrusted input; validate every argument on the server.
@@ -152,5 +261,6 @@ Answers: MCP provides the AI-facing discovery and invocation layer; the policy i
 - [MCP architecture overview](https://modelcontextprotocol.io/docs/learn/architecture)
 - [Official Python SDK quickstart](https://github.com/modelcontextprotocol/python-sdk)
 - [MCP transport specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
+- [OpenAI Agents SDK: local Streamable HTTP MCP servers](https://openai.github.io/openai-agents-python/mcp/)
 
 [Open the MCP slides](../../slides/mcp/)

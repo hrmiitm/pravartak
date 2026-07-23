@@ -93,18 +93,19 @@ Keep the distinction sharp: the model chooses; the host and server execute. The 
 
 ---
 
-## MCP vs tool calling vs RAG
+## Direct function or MCP server?
 
-| Question | Short answer |
-| --- | --- |
-| Does MCP replace tool calling? | No—tool calling chooses; MCP connects. |
-| Does MCP replace REST? | No—it often wraps an existing API. |
-| Does MCP replace RAG? | No—RAG retrieves context; MCP can expose retrieval. |
+| Question | Direct function | MCP server |
+| --- | --- | --- |
+| Lives where? | Chatbot process | Separate server process |
+| Host gets it how? | `tools=[percentage]` | Discovers it through MCP |
+| Call crosses? | Python function call | `stdio` or HTTP protocol |
+| Reusable by another host? | Only by importing code | Yes |
 
-> MCP standardizes the connection, not the model’s reasoning.
+Both use tool calling: the model chooses; MCP changes the connection.
 
 <!-- notes
-This is a high-value Q and A slide. Repeat the simple relationship: tool calling chooses, MCP connects, RAG retrieves.
+Direct tools are ideal for a small private capability. MCP earns its complexity when a capability should be reused, isolated, or separately operated.
 -->
 
 ---
@@ -134,39 +135,50 @@ The docs page contains the complete three-capability server. Highlight that the 
 
 ---
 
-## Run and test
-
-Terminal 1:
+## Chatbot A: direct Python tool
 
 ```bash
-uv run python server.py
+uv add openai-agents
+export OPENAI_API_KEY="your-api-key"
 ```
 
-Terminal 2:
+```python
+@function_tool
+def percentage(obtained: float, total: float) -> dict: ...
 
-```bash
-npx -y @modelcontextprotocol/inspector
+agent = Agent(name="Student Assistant", tools=[percentage])
+result = await Runner.run(agent, "I got 425 out of 500")
 ```
 
-Connect Inspector to `http://localhost:8000/mcp` → list tools → call `percentage(425, 500)` → expect **85.0**.
+```text
+User → model → imported Python function → model → reply
+```
 
 <!-- notes
-The MCP endpoint is not a normal web page. Inspector is a fast way to verify discovery and execution before connecting an AI host.
+The tool is an in-process function. The chatbot owns its code, schema, and execution. This is ordinary function tool calling.
 -->
 
 ---
 
-## Local or remote?
+## Chatbot B: local MCP server
 
-| Use case | Prefer | Remember |
-| --- | --- | --- |
-| Desktop / IDE / local files | `stdio` | Logs go to stderr, never stdout |
-| Shared cloud service | Streamable HTTP | HTTPS, authentication, authorization |
+```python
+async with MCPServerStreamableHttp(
+    name="Student Tools",
+    params={"url": "http://127.0.0.1:8000/mcp"},
+) as server:
+    agent = Agent(name="Student Assistant", mcp_servers=[server])
+    result = await Runner.run(agent, "I got 425 out of 500")
+```
 
-For remote tools: validate inputs, least privilege, user confirmation for writes, and safe audit logs.
+```text
+User → model → MCP client → local MCP server → percentage() → model → reply
+```
+
+Run `server.py` in terminal 1, then `mcp_chatbot.py` in terminal 2.
 
 <!-- notes
-Avoid treating a tool description as a security boundary. The server owns validation and authorization.
+The chatbot does not import percentage. It connects, lists the server's tool schemas, and invokes the selected tool through MCP.
 -->
 
 ---
@@ -176,14 +188,14 @@ Avoid treating a tool description as a security boundary. The server owns valida
 **Q:** A server exposes `course://policy`. Which capability is it?<br />
 **A:** A resource.
 
-**Q:** What happens before a database query?<br />
-**A:** The server validates arguments and authorizes the request.
+**Q:** How do I run the local MCP chatbot?<br />
+**A:** Start `server.py` in terminal 1, then run `mcp_chatbot.py` in terminal 2.
 
 **Q:** What is the key relationship?<br />
-**A:** Tool calling chooses. MCP connects. RAG retrieves.
+**A:** Tool calling chooses. Direct functions run in-process. MCP discovers and calls an external server.
 
-Start small: publish one safe tool, inspect it, then connect a real system.
+Start small: run both chatbot versions with the same marks question.
 
 <!-- notes
-Close by asking learners to change the grade thresholds or add a read-only attendance lookup, then use Inspector to check the interface again.
+Close by asking learners why an IDE assistant can reuse the MCP server but cannot reuse a function that lives only inside another chatbot process.
 -->
