@@ -152,24 +152,16 @@ def validate_marks(obtained: float, total: float) -> str: ...
 async with MCPServerStreamableHttp(
     name="Student Tools", params={"url": "http://127.0.0.1:8000/mcp"}
 ) as server:
-    @function_tool
-    async def read_grading_policy() -> str:
-        return (await server.read_resource("course://grading-policy")).contents[0].text
-
-    @function_tool
-    async def get_explanation_prompt(score: str) -> str:
-        return (await server.get_prompt("explain_mark", {"score": score})).messages[0].content.text
-
     agent = Agent(
         name="Student Assistant",
         model=model,
-        tools=[validate_marks, read_grading_policy, get_explanation_prompt],
+        tools=[validate_marks],
         mcp_servers=[server],
     )
 ```
 
 <!-- notes
-MCP tools are available automatically. The two bridge tools let the model choose whether to read an MCP resource or get an MCP prompt.
+This SDK exposes the server's MCP tools to the Agent. A full MCP host also discovers resource and prompt metadata, then lets the model choose the matching capability.
 -->
 
 ---
@@ -189,14 +181,12 @@ I scored 425 out of 500. What is my percentage and grade?
     ↓
 validate_marks(425, 500) → valid             [direct function]
 percentage(425, 500) → 85.0, "Very Good"   [local MCP server]
-read_grading_policy() → policy                 [agent choice → MCP resource]
-get_explanation_prompt("85") → instruction    [agent choice → MCP prompt]
     ↓
 Assistant reply
 ```
 
 <!-- notes
-The agent discovers percentage from MCP, but runs validate_marks locally. It chooses the bridge tools only when the user's request needs the policy or explanation prompt.
+The agent discovers percentage from MCP, but runs validate_marks locally. In a full MCP host, the model can also choose a resource or prompt after the host has discovered their metadata.
 -->
 
 ---
