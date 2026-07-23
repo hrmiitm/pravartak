@@ -59,6 +59,16 @@ export default defineConfig({
   base: normalizedBase,
   output: 'static',
   trailingSlash: 'always',
+  // Some classroom and shared Linux machines exhaust their inotify watcher limit.
+  // Polling keeps `npm run dev` usable there without requiring sudo/sysctl access.
+  vite: {
+    server: {
+      watch: {
+        usePolling: true,
+        interval: 700,
+      },
+    },
+  },
   integrations: [
     starlight({
       title: 'Pravartak',
