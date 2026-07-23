@@ -133,7 +133,7 @@ For a local-only integration, `stdio` is also common: the AI host starts the ser
 
 ## One chatbot: use a direct tool and MCP together
 
-This single example answers: **“I scored 425 out of 500. What is my percentage, and which grade band does the university policy assign?”**
+This single example answers: **“I scored 425 out of 500. What is my percentage, which grade band applies, and what does the policy say?”**
 
 - `validate_marks` is a small chatbot-specific safety check, so it is a **direct function tool**.
 - `percentage` is a shared student-service capability. It lives behind the local MCP server so a chatbot, IDE assistant, or future student portal can use the same implementation.
@@ -155,23 +155,7 @@ from agents import Agent, OpenAIChatCompletionsModel, Runner, function_tool, set
 from agents.mcp import MCPServerStreamableHttp
 from openai import AsyncOpenAI
 
-
-OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1"
-OLLAMA_MODEL = "gemma4:e2b"
-MCP_URL = "http://127.0.0.1:8000/mcp"
-
-
-set_tracing_disabled(True)
-ollama_client = AsyncOpenAI(
-    base_url=OLLAMA_BASE_URL,
-    api_key="ollama",
-)
-ollama_model = OpenAIChatCompletionsModel(
-    model=OLLAMA_MODEL,
-    openai_client=ollama_client,
-)
-
-
+# A direct function tool stays in this chatbot process.
 @function_tool
 def validate_marks(obtained: float, total: float) -> str:
     """Validate marks before sharing them with an external capability."""
@@ -181,21 +165,33 @@ def validate_marks(obtained: float, total: float) -> str:
 
 
 async def main() -> None:
+    # Disable OpenAI tracing because this example uses a local Ollama model.
+    set_tracing_disabled(True)
+    ollama = AsyncOpenAI(base_url="http://127.0.0.1:11434/v1", api_key="ollama")
+    model = OpenAIChatCompletionsModel("gemma4:e2b", ollama)
+
     async with MCPServerStreamableHttp(
-        name="Student Policy",
-        params={"url": MCP_URL},
+        name="Student Tools",
+        params={"url": "http://127.0.0.1:8000/mcp"},
+        # Reuse the tool schema because this server's tools do not change here.
         cache_tools_list=True,
         require_approval="never",
     ) as server:
+        # Use MCP data and an MCP prompt as context for the chatbot's reply.
+        policy = await server.read_resource("course://grading-policy")
+        # MCP prompt arguments are strings on the wire.
+        explanation = await server.get_prompt("explain_mark", {"score": "85"})
+
         agent = Agent(
             name="Student Assistant",
             instructions=(
                 "For a marks question, first call validate_marks. "
                 "When the marks are valid, call the Student Tools MCP percentage tool. "
                 "Never calculate a percentage or grade yourself. "
-                "Use the two tool results to give a concise answer."
+                f"Grading policy from the MCP resource: {policy.contents[0].text} "
+                f"Use this MCP prompt for the final explanation: {explanation.messages[0].content.text}"
             ),
-            model=ollama_model,
+            model=model,
             tools=[validate_marks],
             mcp_servers=[server],
         )
@@ -206,6 +202,8 @@ async def main() -> None:
 
 asyncio.run(main())
 ```
+
+`read_resource()` gets the published policy, while `get_prompt()` gets a server-owned reusable instruction. `Runner.run()` then lets the model use both pieces of context and call the direct validator and shared MCP percentage tool as needed.
 
 Run the complete example in two terminals:
 
@@ -222,6 +220,8 @@ Ask: `I obtained 425 marks out of 500. What is my percentage and grade?`
 ```text
 User question
   → model selects validate_marks(425, 500)             [direct Python tool]
+  → chatbot reads course://grading-policy               [MCP resource]
+  → chatbot gets explain_mark(85)                       [MCP prompt]
   → model selects percentage(425, 500)                 [MCP tool]
   → MCP client calls http://127.0.0.1:8000/mcp
   → server returns 85.0 and "Very Good"

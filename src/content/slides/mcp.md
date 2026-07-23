@@ -152,6 +152,8 @@ def validate_marks(obtained: float, total: float) -> str: ...
 async with MCPServerStreamableHttp(
     name="Student Tools", params={"url": "http://127.0.0.1:8000/mcp"}
 ) as server:
+    policy = await server.read_resource("course://grading-policy")
+    prompt = await server.get_prompt("explain_mark", {"score": "85"})
     agent = Agent(
         name="Student Assistant",
         model=model,
@@ -161,7 +163,7 @@ async with MCPServerStreamableHttp(
 ```
 
 <!-- notes
-This is one Agent, not two alternatives. It owns a direct validator and connects to the separately running Student Tools server.
+This is one Agent, not two alternatives. It owns a direct validator, calls the MCP tool, and reads an MCP resource and prompt from the separately running Student Tools server.
 -->
 
 ---
@@ -180,6 +182,8 @@ uv run code-test/chatbot.py
 I scored 425 out of 500. What is my percentage and grade?
     ↓
 validate_marks(425, 500) → valid             [direct function]
+course://grading-policy → policy              [MCP resource]
+explain_mark(85) → reply instruction          [MCP prompt]
 percentage(425, 500) → 85.0, "Very Good"   [local MCP server]
     ↓
 Assistant reply
