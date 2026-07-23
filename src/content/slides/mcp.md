@@ -152,18 +152,24 @@ def validate_marks(obtained: float, total: float) -> str: ...
 async with MCPServerStreamableHttp(
     name="Student Tools", params={"url": "http://127.0.0.1:8000/mcp"}
 ) as server:
-    policy = await server.read_resource("course://grading-policy")
-    prompt = await server.get_prompt("explain_mark", {"score": "85"})
+    @function_tool
+    async def read_grading_policy() -> str:
+        return (await server.read_resource("course://grading-policy")).contents[0].text
+
+    @function_tool
+    async def get_explanation_prompt(score: str) -> str:
+        return (await server.get_prompt("explain_mark", {"score": score})).messages[0].content.text
+
     agent = Agent(
         name="Student Assistant",
         model=model,
-        tools=[validate_marks],
+        tools=[validate_marks, read_grading_policy, get_explanation_prompt],
         mcp_servers=[server],
     )
 ```
 
 <!-- notes
-This is one Agent, not two alternatives. It owns a direct validator, calls the MCP tool, and reads an MCP resource and prompt from the separately running Student Tools server.
+MCP tools are available automatically. The two bridge tools let the model choose whether to read an MCP resource or get an MCP prompt.
 -->
 
 ---
@@ -182,15 +188,15 @@ uv run code-test/chatbot.py
 I scored 425 out of 500. What is my percentage and grade?
     ↓
 validate_marks(425, 500) → valid             [direct function]
-course://grading-policy → policy              [MCP resource]
-explain_mark(85) → reply instruction          [MCP prompt]
 percentage(425, 500) → 85.0, "Very Good"   [local MCP server]
+read_grading_policy() → policy                 [agent choice → MCP resource]
+get_explanation_prompt("85") → instruction    [agent choice → MCP prompt]
     ↓
 Assistant reply
 ```
 
 <!-- notes
-The agent discovers percentage from MCP, but runs validate_marks inside its own process. Both results return to the model before it answers.
+The agent discovers percentage from MCP, but runs validate_marks locally. It chooses the bridge tools only when the user's request needs the policy or explanation prompt.
 -->
 
 ---

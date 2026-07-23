@@ -177,10 +177,19 @@ async def main() -> None:
         cache_tools_list=True,
         require_approval="never",
     ) as server:
-        # Use MCP data and an MCP prompt as context for the chatbot's reply.
-        policy = await server.read_resource("course://grading-policy")
-        # MCP prompt arguments are strings on the wire.
-        explanation = await server.get_prompt("explain_mark", {"score": "85"})
+        # The model chooses these bridge tools when it needs MCP data.
+        # MCP tools are discovered automatically; resources and prompts are not.
+        @function_tool
+        async def read_grading_policy() -> str:
+            """Read the grading policy from the Student Tools MCP resource."""
+            policy = await server.read_resource("course://grading-policy")
+            return policy.contents[0].text
+
+        @function_tool
+        async def get_explanation_prompt(score: str) -> str:
+            """Get the Student Tools MCP prompt for explaining a percentage."""
+            prompt = await server.get_prompt("explain_mark", {"score": score})
+            return prompt.messages[0].content.text
 
         agent = Agent(
             name="Student Assistant",
@@ -188,11 +197,11 @@ async def main() -> None:
                 "For a marks question, first call validate_marks. "
                 "When the marks are valid, call the Student Tools MCP percentage tool. "
                 "Never calculate a percentage or grade yourself. "
-                f"Grading policy from the MCP resource: {policy.contents[0].text} "
-                f"Use this MCP prompt for the final explanation: {explanation.messages[0].content.text}"
+                "Call read_grading_policy when the user asks about the policy. "
+                "After getting the percentage, call get_explanation_prompt when the user asks for an explanation."
             ),
             model=model,
-            tools=[validate_marks],
+            tools=[validate_marks, read_grading_policy, get_explanation_prompt],
             mcp_servers=[server],
         )
         question = input("You: ")
@@ -203,7 +212,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-`read_resource()` gets the published policy, while `get_prompt()` gets a server-owned reusable instruction. `Runner.run()` then lets the model use both pieces of context and call the direct validator and shared MCP percentage tool as needed.
+Connecting an MCP server makes its **tools** available to the agent automatically. Resources and prompts are separate MCP capability types, so `read_grading_policy` and `get_explanation_prompt` are small bridge tools. This means `Runner.run()` lets the model decide whether it needs the policy or explanation prompt instead of fetching them at chatbot startup.
 
 Run the complete example in two terminals:
 
@@ -215,14 +224,14 @@ uv run code-test/mymcp.py
 uv run code-test/chatbot.py
 ```
 
-Ask: `I obtained 425 marks out of 500. What is my percentage and grade?`
+Ask: `I obtained 425 marks out of 500. What is my percentage and grade? What is the grading policy? Please explain my result encouragingly.`
 
 ```text
 User question
   → model selects validate_marks(425, 500)             [direct Python tool]
-  → chatbot reads course://grading-policy               [MCP resource]
-  → chatbot gets explain_mark(85)                       [MCP prompt]
   → model selects percentage(425, 500)                 [MCP tool]
+  → model selects read_grading_policy()                 [bridge → MCP resource]
+  → model selects get_explanation_prompt("85")          [bridge → MCP prompt]
   → MCP client calls http://127.0.0.1:8000/mcp
   → server returns 85.0 and "Very Good"
   → model writes the final reply
@@ -234,6 +243,7 @@ User question
 | --- | --- | --- |
 | `validate_marks` | The safety rule is small, local, and specific to this chatbot. | Not needed for this one app. |
 | `percentage` | It would duplicate the student-service implementation inside every chatbot. | The capability must be shared, independently updated, audited, or reused by compatible AI hosts. |
+| `read_grading_policy` / `get_explanation_prompt` | They translate the agent's selected call into an MCP resource or prompt request. | They preserve resource and prompt semantics while keeping the choice with the model. |
 
 Both are still **tools chosen by the model**. The difference is the boundary: a direct tool is an in-process function, while MCP discovers and invokes a separately running service.
 
