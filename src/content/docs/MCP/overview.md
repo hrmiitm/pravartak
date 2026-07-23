@@ -143,20 +143,35 @@ This single example answers: **“I scored 425 out of 500. What is my percentage
 - `calculate_percentage` is a small, deterministic calculation owned only by this chatbot, so it is a **direct function tool**.
 - `grade_band` is the institution's shared policy. It lives behind the local MCP server so a chatbot, IDE assistant, or future student portal can use the same official rule.
 
-Add the Agents SDK and set an API key:
+Install and start a local Ollama model:
 
 ```bash
 uv add openai-agents
-export OPENAI_API_KEY="your-api-key"
+ollama pull llama3.2
+ollama serve
+export OLLAMA_MODEL="llama3.2"
 ```
 
 Create `student_chatbot.py`:
 
 ```python
 import asyncio
+import os
 
-from agents import Agent, Runner, function_tool
+from agents import Agent, OpenAIChatCompletionsModel, Runner, function_tool, set_tracing_disabled
 from agents.mcp import MCPServerStreamableHttp
+from openai import AsyncOpenAI
+
+
+set_tracing_disabled(True)
+ollama_client = AsyncOpenAI(
+    base_url="http://127.0.0.1:11434/v1",
+    api_key="ollama",
+)
+ollama_model = OpenAIChatCompletionsModel(
+    model=os.environ["OLLAMA_MODEL"],
+    openai_client=ollama_client,
+)
 
 
 @function_tool
@@ -180,6 +195,7 @@ async def main() -> None:
                 "Then use the Student Policy MCP tool grade_band to classify that score. "
                 "Do not invent a grading policy."
             ),
+            model=ollama_model,
             tools=[calculate_percentage],
             mcp_servers=[server],
         )

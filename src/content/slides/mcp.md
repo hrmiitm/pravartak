@@ -143,10 +143,14 @@ This short slide shows the MCP boundary. The lesson has the complete grade bands
 
 ```bash
 uv add openai-agents
-export OPENAI_API_KEY="your-api-key"
+ollama pull llama3.2
+export OLLAMA_MODEL="llama3.2"
 ```
 
 ```python
+ollama = AsyncOpenAI(base_url="http://127.0.0.1:11434/v1", api_key="ollama")
+model = OpenAIChatCompletionsModel(os.environ["OLLAMA_MODEL"], ollama)
+
 @function_tool
 def calculate_percentage(obtained: float, total: float) -> float: ...
 
@@ -155,6 +159,7 @@ async with MCPServerStreamableHttp(
 ) as policy:
     agent = Agent(
         name="Student Assistant",
+        model=model,
         tools=[calculate_percentage],
         mcp_servers=[policy],
     )
