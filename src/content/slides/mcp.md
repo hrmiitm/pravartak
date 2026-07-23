@@ -97,13 +97,13 @@ Keep the distinction sharp: the model chooses; the host and server execute. The 
 
 | Capability | Boundary | Why? |
 | --- | --- | --- |
-| `calculate_percentage(425, 500)` | Direct Python tool | Small, local calculation |
-| `grade_band(85)` | MCP server tool | Shared university policy |
+| `validate_marks(425, 500)` | Direct Python tool | Chatbot-specific safety check |
+| `percentage(425, 500)` | MCP server tool | Shared student-service capability |
 
 Both are selected by the model in the **same answer**.
 
 <!-- notes
-The key is not that MCP is more advanced. Choose the smallest boundary that matches ownership and reuse: one app's calculation stays local; an official policy is shared through MCP.
+The key is not that MCP is more advanced. Choose the smallest boundary that matches ownership and reuse: a local validation rule stays in the chatbot; the reusable student calculation lives behind MCP.
 -->
 
 ---
@@ -121,20 +121,16 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("Student Tools")
 
 @mcp.tool()
-def grade_band(score: float) -> str:
-    if not 0 <= score <= 100:
-        raise ValueError("Invalid score")
-    if score >= 90:
-        return "Excellent"
-    if score >= 75:
-        return "Very Good"
-    if score >= 60:
-        return "Good"
-    return "Pass" if score >= 40 else "Fail"
+def percentage(obtained: float, total: float) -> dict:
+    if not 0 <= obtained <= total or total <= 0:
+        raise ValueError("Invalid marks")
+    score = round(obtained / total * 100, 2)
+    grade = "Excellent" if score >= 90 else "Very Good" if score >= 75 else "Good" if score >= 60 else "Pass" if score >= 40 else "Fail"
+    return {"percentage": score, "grade": grade}
 ```
 
 <!-- notes
-This short slide shows the MCP boundary. The lesson has the complete grade bands and resource/prompt examples.
+This short slide shows the MCP boundary. The lesson has the complete grade-band logic and resource/prompt examples.
 -->
 
 ---
@@ -143,30 +139,29 @@ This short slide shows the MCP boundary. The lesson has the complete grade bands
 
 ```bash
 uv add openai-agents
-ollama pull llama3.2
-export OLLAMA_MODEL="llama3.2"
+ollama pull gemma4:e2b
 ```
 
 ```python
 ollama = AsyncOpenAI(base_url="http://127.0.0.1:11434/v1", api_key="ollama")
-model = OpenAIChatCompletionsModel(os.environ["OLLAMA_MODEL"], ollama)
+model = OpenAIChatCompletionsModel("gemma4:e2b", ollama)
 
 @function_tool
-def calculate_percentage(obtained: float, total: float) -> float: ...
+def validate_marks(obtained: float, total: float) -> str: ...
 
 async with MCPServerStreamableHttp(
-    name="Student Policy", params={"url": "http://127.0.0.1:8000/mcp"}
-) as policy:
+    name="Student Tools", params={"url": "http://127.0.0.1:8000/mcp"}
+) as server:
     agent = Agent(
         name="Student Assistant",
         model=model,
-        tools=[calculate_percentage],
-        mcp_servers=[policy],
+        tools=[validate_marks],
+        mcp_servers=[server],
     )
 ```
 
 <!-- notes
-This is one Agent, not two alternatives. It owns a direct calculator and connects to the separately running policy server.
+This is one Agent, not two alternatives. It owns a direct validator and connects to the separately running Student Tools server.
 -->
 
 ---
@@ -175,23 +170,23 @@ This is one Agent, not two alternatives. It owns a direct calculator and connect
 
 ```bash
 # Terminal 1
-uv run python server.py
+uv run code-test/mymcp.py
 
 # Terminal 2
-uv run python student_chatbot.py
+uv run code-test/chatbot.py
 ```
 
 ```text
-I scored 425 out of 500. What is my percentage and grade band?
+I scored 425 out of 500. What is my percentage and grade?
     ↓
-calculate_percentage(425, 500) → 85.0       [direct function]
-grade_band(85.0) → "Very Good"              [local MCP server]
+validate_marks(425, 500) → valid             [direct function]
+percentage(425, 500) → 85.0, "Very Good"   [local MCP server]
     ↓
 Assistant reply
 ```
 
 <!-- notes
-The agent discovers grade_band from MCP, but runs calculate_percentage inside its own process. Both results return to the model before it answers.
+The agent discovers percentage from MCP, but runs validate_marks inside its own process. Both results return to the model before it answers.
 -->
 
 ---
@@ -201,8 +196,8 @@ The agent discovers grade_band from MCP, but runs calculate_percentage inside it
 **Q:** A server exposes `course://policy`. Which capability is it?<br />
 **A:** A resource.
 
-**Q:** Why is the calculation a direct tool?<br />
-**A:** It is small, deterministic, and needed only by this chatbot.
+**Q:** Why is validation a direct tool?<br />
+**A:** It is small, local, and specific to this chatbot.
 
 **Q:** What is the key relationship?<br />
 **A:** Tool calling chooses both. MCP is used when a capability should be shared or separately managed.

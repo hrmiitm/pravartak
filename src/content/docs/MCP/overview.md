@@ -85,24 +85,19 @@ mcp = FastMCP("Student Tools")
 
 
 @mcp.tool()
-def grade_band(score: float) -> str:
-    """Return the institution's grade band for a percentage score."""
-    if not 0 <= score <= 100:
-        raise ValueError("Score must be between 0 and 100.")
-    if score >= 90:
-        return "Excellent"
-    if score >= 75:
-        return "Very Good"
-    if score >= 60:
-        return "Good"
-    if score >= 40:
-        return "Pass"
-    return "Fail"
+def percentage(obtained: float, total: float) -> dict:
+    """Calculate a student's percentage and grade category."""
+    if not 0 <= obtained <= total or total <= 0:
+        raise ValueError("Marks must satisfy 0 <= obtained <= total.")
+
+    score = round(obtained / total * 100, 2)
+    grade = "Excellent" if score >= 90 else "Very Good" if score >= 75 else "Good" if score >= 60 else "Pass" if score >= 40 else "Fail"
+    return {"percentage": score, "grade": grade}
 
 
 @mcp.resource("course://grading-policy")
 def grading_policy() -> str:
-    """Return the grading bands used by the grade_band tool."""
+    """Return the grading bands used by the percentage tool."""
     return "90+: Excellent; 75–89.99: Very Good; 60–74.99: Good; 40–59.99: Pass; below 40: Fail."
 
 
@@ -132,7 +127,7 @@ It serves the Streamable HTTP endpoint at `http://localhost:8000/mcp`. In a seco
 npx -y @modelcontextprotocol/inspector
 ```
 
-Open the Inspector URL it prints, connect to `http://localhost:8000/mcp`, list the tools, and call `grade_band` with `score: 85`. The expected result is `Very Good`.
+Open the Inspector URL it prints, connect to `http://localhost:8000/mcp`, list the tools, and call `percentage` with `obtained: 425` and `total: 500`. The expected result is `85.0` and `Very Good`.
 
 For a local-only integration, `stdio` is also common: the AI host starts the server as a subprocess. Never send normal logs to stdout in that mode—stdout carries protocol messages; log to stderr instead.
 
@@ -140,63 +135,68 @@ For a local-only integration, `stdio` is also common: the AI host starts the ser
 
 This single example answers: **“I scored 425 out of 500. What is my percentage, and which grade band does the university policy assign?”**
 
-- `calculate_percentage` is a small, deterministic calculation owned only by this chatbot, so it is a **direct function tool**.
-- `grade_band` is the institution's shared policy. It lives behind the local MCP server so a chatbot, IDE assistant, or future student portal can use the same official rule.
+- `validate_marks` is a small chatbot-specific safety check, so it is a **direct function tool**.
+- `percentage` is a shared student-service capability. It lives behind the local MCP server so a chatbot, IDE assistant, or future student portal can use the same implementation.
 
 Install and start a local Ollama model:
 
 ```bash
 uv add openai-agents
-ollama pull llama3.2
+ollama pull gemma4:e2b
 ollama serve
-export OLLAMA_MODEL="llama3.2"
 ```
 
 Create `student_chatbot.py`:
 
 ```python
 import asyncio
-import os
 
 from agents import Agent, OpenAIChatCompletionsModel, Runner, function_tool, set_tracing_disabled
 from agents.mcp import MCPServerStreamableHttp
 from openai import AsyncOpenAI
 
 
+OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1"
+OLLAMA_MODEL = "gemma4:e2b"
+MCP_URL = "http://127.0.0.1:8000/mcp"
+
+
 set_tracing_disabled(True)
 ollama_client = AsyncOpenAI(
-    base_url="http://127.0.0.1:11434/v1",
+    base_url=OLLAMA_BASE_URL,
     api_key="ollama",
 )
 ollama_model = OpenAIChatCompletionsModel(
-    model=os.environ["OLLAMA_MODEL"],
+    model=OLLAMA_MODEL,
     openai_client=ollama_client,
 )
 
 
 @function_tool
-def calculate_percentage(obtained: float, total: float) -> float:
-    """Calculate a percentage from marks obtained and total marks."""
+def validate_marks(obtained: float, total: float) -> str:
+    """Validate marks before sharing them with an external capability."""
     if not 0 <= obtained <= total or total <= 0:
-        raise ValueError("Marks must satisfy 0 <= obtained <= total.")
-    return round(obtained / total * 100, 2)
+        return "Invalid marks: require 0 <= obtained <= total and total > 0."
+    return "Marks are valid. Use the Student Tools MCP percentage tool next."
 
 
 async def main() -> None:
     async with MCPServerStreamableHttp(
         name="Student Policy",
-        params={"url": "http://127.0.0.1:8000/mcp"},
+        params={"url": MCP_URL},
         cache_tools_list=True,
+        require_approval="never",
     ) as server:
         agent = Agent(
             name="Student Assistant",
             instructions=(
-                "For marks questions, first use calculate_percentage. "
-                "Then use the Student Policy MCP tool grade_band to classify that score. "
-                "Do not invent a grading policy."
+                "For a marks question, first call validate_marks. "
+                "When the marks are valid, call the Student Tools MCP percentage tool. "
+                "Never calculate a percentage or grade yourself. "
+                "Use the two tool results to give a concise answer."
             ),
             model=ollama_model,
-            tools=[calculate_percentage],
+            tools=[validate_marks],
             mcp_servers=[server],
         )
         question = input("You: ")
@@ -210,21 +210,21 @@ asyncio.run(main())
 Run the complete example in two terminals:
 
 ```bash
-# Terminal 1: policy service, running locally
-uv run python server.py
+# Terminal 1: locally running MCP service
+uv run code-test/mymcp.py
 
 # Terminal 2: chatbot host
-uv run python student_chatbot.py
+uv run code-test/chatbot.py
 ```
 
-Ask: `I scored 425 out of 500. What is my percentage, and which grade band does the university policy assign?`
+Ask: `I obtained 425 marks out of 500. What is my percentage and grade?`
 
 ```text
 User question
-  → model selects calculate_percentage(425, 500)     [direct Python tool]
-  → model selects grade_band(85.0)                    [MCP tool]
+  → model selects validate_marks(425, 500)             [direct Python tool]
+  → model selects percentage(425, 500)                 [MCP tool]
   → MCP client calls http://127.0.0.1:8000/mcp
-  → server returns "Very Good"
+  → server returns 85.0 and "Very Good"
   → model writes the final reply
 ```
 
@@ -232,8 +232,8 @@ User question
 
 | Capability in this chatbot | Use direct function tool when… | Use MCP when… |
 | --- | --- | --- |
-| `calculate_percentage` | The logic is small, local, deterministic, and belongs only to this app. | Not needed for this one app. |
-| `grade_band` | It would duplicate the official policy inside every chatbot. | The policy must be shared, independently updated, audited, or reused by compatible AI hosts. |
+| `validate_marks` | The safety rule is small, local, and specific to this chatbot. | Not needed for this one app. |
+| `percentage` | It would duplicate the student-service implementation inside every chatbot. | The capability must be shared, independently updated, audited, or reused by compatible AI hosts. |
 
 Both are still **tools chosen by the model**. The difference is the boundary: a direct tool is an in-process function, while MCP discovers and invokes a separately running service.
 
