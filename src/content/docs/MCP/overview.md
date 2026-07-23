@@ -85,19 +85,24 @@ mcp = FastMCP("Student Tools")
 
 
 @mcp.tool()
-def percentage(obtained: float, total: float) -> dict:
-    """Calculate a student's percentage and grade category."""
-    if not 0 <= obtained <= total or total <= 0:
-        raise ValueError("Marks must satisfy 0 <= obtained <= total.")
-
-    score = round(obtained / total * 100, 2)
-    grade = "Excellent" if score >= 90 else "Very Good" if score >= 75 else "Good" if score >= 60 else "Pass" if score >= 40 else "Fail"
-    return {"percentage": score, "grade": grade}
+def grade_band(score: float) -> str:
+    """Return the institution's grade band for a percentage score."""
+    if not 0 <= score <= 100:
+        raise ValueError("Score must be between 0 and 100.")
+    if score >= 90:
+        return "Excellent"
+    if score >= 75:
+        return "Very Good"
+    if score >= 60:
+        return "Good"
+    if score >= 40:
+        return "Pass"
+    return "Fail"
 
 
 @mcp.resource("course://grading-policy")
 def grading_policy() -> str:
-    """Return the grading bands used by the percentage tool."""
+    """Return the grading bands used by the grade_band tool."""
     return "90+: Excellent; 75–89.99: Very Good; 60–74.99: Good; 40–59.99: Pass; below 40: Fail."
 
 
@@ -127,79 +132,55 @@ It serves the Streamable HTTP endpoint at `http://localhost:8000/mcp`. In a seco
 npx -y @modelcontextprotocol/inspector
 ```
 
-Open the Inspector URL it prints, connect to `http://localhost:8000/mcp`, list the tools, and call `percentage` with `obtained: 425` and `total: 500`. The expected result is `85.0` and `Very Good`.
+Open the Inspector URL it prints, connect to `http://localhost:8000/mcp`, list the tools, and call `grade_band` with `score: 85`. The expected result is `Very Good`.
 
 For a local-only integration, `stdio` is also common: the AI host starts the server as a subprocess. Never send normal logs to stdout in that mode—stdout carries protocol messages; log to stderr instead.
 
-## Connect a chatbot: direct function first
+## One chatbot: use a direct tool and MCP together
 
-The same `percentage` capability can be attached directly to a chatbot. Add the Agents SDK and set an API key:
+This single example answers: **“I scored 425 out of 500. What is my percentage, and which grade band does the university policy assign?”**
+
+- `calculate_percentage` is a small, deterministic calculation owned only by this chatbot, so it is a **direct function tool**.
+- `grade_band` is the institution's shared policy. It lives behind the local MCP server so a chatbot, IDE assistant, or future student portal can use the same official rule.
+
+Add the Agents SDK and set an API key:
 
 ```bash
 uv add openai-agents
 export OPENAI_API_KEY="your-api-key"
 ```
 
-Create `direct_chatbot.py`:
+Create `student_chatbot.py`:
 
 ```python
 import asyncio
 
 from agents import Agent, Runner, function_tool
+from agents.mcp import MCPServerStreamableHttp
 
 
 @function_tool
-def percentage(obtained: float, total: float) -> dict:
-    """Calculate a student's percentage and grade category."""
+def calculate_percentage(obtained: float, total: float) -> float:
+    """Calculate a percentage from marks obtained and total marks."""
     if not 0 <= obtained <= total or total <= 0:
         raise ValueError("Marks must satisfy 0 <= obtained <= total.")
-    score = round(obtained / total * 100, 2)
-    grade = "Excellent" if score >= 90 else "Very Good" if score >= 75 else "Good" if score >= 60 else "Pass" if score >= 40 else "Fail"
-    return {"percentage": score, "grade": grade}
-
-
-async def main() -> None:
-    agent = Agent(
-        name="Student Assistant",
-        instructions="Use the percentage tool whenever a student provides marks.",
-        tools=[percentage],
-    )
-    question = input("You: ")
-    result = await Runner.run(agent, question)
-    print("Assistant:", result.final_output)
-
-
-asyncio.run(main())
-```
-
-Run it with `uv run python direct_chatbot.py`, then ask: `I obtained 425 out of 500. What is my percentage and grade?`
-
-```text
-User → model → directly imported Python function → model → reply
-```
-
-The chatbot and tool are tightly coupled: this application imports, describes, and executes the function itself.
-
-## Connect the same chatbot through MCP
-
-Keep `server.py` running locally, then create `mcp_chatbot.py`:
-
-```python
-import asyncio
-
-from agents import Agent, Runner
-from agents.mcp import MCPServerStreamableHttp
+    return round(obtained / total * 100, 2)
 
 
 async def main() -> None:
     async with MCPServerStreamableHttp(
-        name="Student Tools",
+        name="Student Policy",
         params={"url": "http://127.0.0.1:8000/mcp"},
         cache_tools_list=True,
     ) as server:
         agent = Agent(
             name="Student Assistant",
-            instructions="Use the Student Tools MCP server whenever a student provides marks.",
+            instructions=(
+                "For marks questions, first use calculate_percentage. "
+                "Then use the Student Policy MCP tool grade_band to classify that score. "
+                "Do not invent a grading policy."
+            ),
+            tools=[calculate_percentage],
             mcp_servers=[server],
         )
         question = input("You: ")
@@ -210,35 +191,35 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-Run the two processes in separate terminals:
+Run the complete example in two terminals:
 
 ```bash
-# Terminal 1: the locally running MCP server
+# Terminal 1: policy service, running locally
 uv run python server.py
 
-# Terminal 2: the chatbot host
-uv run python mcp_chatbot.py
+# Terminal 2: chatbot host
+uv run python student_chatbot.py
 ```
 
-Ask the same marks question. The chatbot connects to the local endpoint, lists the available MCP tools and their schemas, gives those tools to the model, and sends the selected call back through the MCP server.
+Ask: `I scored 425 out of 500. What is my percentage, and which grade band does the university policy assign?`
 
 ```text
-User → model → chatbot's MCP client → http://127.0.0.1:8000/mcp → percentage() → model → reply
+User question
+  → model selects calculate_percentage(425, 500)     [direct Python tool]
+  → model selects grade_band(85.0)                    [MCP tool]
+  → MCP client calls http://127.0.0.1:8000/mcp
+  → server returns "Very Good"
+  → model writes the final reply
 ```
 
-The chatbot never imports `percentage()`. It can swap to another compatible server, or another AI host can reuse this server, without copying the tool implementation.
+## Why this split is useful
 
-## Direct function or MCP server?
-
-| Question | Direct function tool | MCP server |
+| Capability in this chatbot | Use direct function tool when… | Use MCP when… |
 | --- | --- | --- |
-| Where does the implementation live? | Inside the chatbot process | In a separate server process |
-| How does the host obtain the tool? | `tools=[percentage]` | Lists tools through MCP |
-| How is the tool called? | Normal in-process Python call | JSON-RPC over `stdio` or HTTP |
-| Best first use | One small, private capability | A reusable integration or separate trust boundary |
-| Can another compatible host reuse it? | Only by importing its code | Yes, by connecting to the server |
+| `calculate_percentage` | The logic is small, local, deterministic, and belongs only to this app. | Not needed for this one app. |
+| `grade_band` | It would duplicate the official policy inside every chatbot. | The policy must be shared, independently updated, audited, or reused by compatible AI hosts. |
 
-Both examples still use **tool calling**: the model chooses the tool and arguments. MCP changes the boundary and the protocol used to discover and execute that tool.
+Both are still **tools chosen by the model**. The difference is the boundary: a direct tool is an in-process function, while MCP discovers and invokes a separately running service.
 
 ## Design safely
 

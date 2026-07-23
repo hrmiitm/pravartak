@@ -93,19 +93,17 @@ Keep the distinction sharp: the model chooses; the host and server execute. The 
 
 ---
 
-## Direct function or MCP server?
+## One chatbot, two tools
 
-| Question | Direct function | MCP server |
+| Capability | Boundary | Why? |
 | --- | --- | --- |
-| Lives where? | Chatbot process | Separate server process |
-| Host gets it how? | `tools=[percentage]` | Discovers it through MCP |
-| Call crosses? | Python function call | `stdio` or HTTP protocol |
-| Reusable by another host? | Only by importing code | Yes |
+| `calculate_percentage(425, 500)` | Direct Python tool | Small, local calculation |
+| `grade_band(85)` | MCP server tool | Shared university policy |
 
-Both use tool calling: the model chooses; MCP changes the connection.
+Both are selected by the model in the **same answer**.
 
 <!-- notes
-Direct tools are ideal for a small private capability. MCP earns its complexity when a capability should be reused, isolated, or separately operated.
+The key is not that MCP is more advanced. Choose the smallest boundary that matches ownership and reuse: one app's calculation stays local; an official policy is shared through MCP.
 -->
 
 ---
@@ -123,19 +121,25 @@ from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("Student Tools")
 
 @mcp.tool()
-def percentage(obtained: float, total: float) -> dict:
-    if not 0 <= obtained <= total or total <= 0:
-        raise ValueError("Invalid marks")
-    return {"percentage": round(obtained / total * 100, 2)}
+def grade_band(score: float) -> str:
+    if not 0 <= score <= 100:
+        raise ValueError("Invalid score")
+    if score >= 90:
+        return "Excellent"
+    if score >= 75:
+        return "Very Good"
+    if score >= 60:
+        return "Good"
+    return "Pass" if score >= 40 else "Fail"
 ```
 
 <!-- notes
-The docs page contains the complete three-capability server. Highlight that the decorator, docstring, and type hints become a usable interface for the client.
+This short slide shows the MCP boundary. The lesson has the complete grade bands and resource/prompt examples.
 -->
 
 ---
 
-## Chatbot A: direct Python tool
+## One chatbot configuration
 
 ```bash
 uv add openai-agents
@@ -144,41 +148,45 @@ export OPENAI_API_KEY="your-api-key"
 
 ```python
 @function_tool
-def percentage(obtained: float, total: float) -> dict: ...
+def calculate_percentage(obtained: float, total: float) -> float: ...
 
-agent = Agent(name="Student Assistant", tools=[percentage])
-result = await Runner.run(agent, "I got 425 out of 500")
-```
-
-```text
-User → model → imported Python function → model → reply
+async with MCPServerStreamableHttp(
+    name="Student Policy", params={"url": "http://127.0.0.1:8000/mcp"}
+) as policy:
+    agent = Agent(
+        name="Student Assistant",
+        tools=[calculate_percentage],
+        mcp_servers=[policy],
+    )
 ```
 
 <!-- notes
-The tool is an in-process function. The chatbot owns its code, schema, and execution. This is ordinary function tool calling.
+This is one Agent, not two alternatives. It owns a direct calculator and connects to the separately running policy server.
 -->
 
 ---
 
-## Chatbot B: local MCP server
+## One question, both paths
 
-```python
-async with MCPServerStreamableHttp(
-    name="Student Tools",
-    params={"url": "http://127.0.0.1:8000/mcp"},
-) as server:
-    agent = Agent(name="Student Assistant", mcp_servers=[server])
-    result = await Runner.run(agent, "I got 425 out of 500")
+```bash
+# Terminal 1
+uv run python server.py
+
+# Terminal 2
+uv run python student_chatbot.py
 ```
 
 ```text
-User → model → MCP client → local MCP server → percentage() → model → reply
+I scored 425 out of 500. What is my percentage and grade band?
+    ↓
+calculate_percentage(425, 500) → 85.0       [direct function]
+grade_band(85.0) → "Very Good"              [local MCP server]
+    ↓
+Assistant reply
 ```
 
-Run `server.py` in terminal 1, then `mcp_chatbot.py` in terminal 2.
-
 <!-- notes
-The chatbot does not import percentage. It connects, lists the server's tool schemas, and invokes the selected tool through MCP.
+The agent discovers grade_band from MCP, but runs calculate_percentage inside its own process. Both results return to the model before it answers.
 -->
 
 ---
@@ -188,14 +196,14 @@ The chatbot does not import percentage. It connects, lists the server's tool sch
 **Q:** A server exposes `course://policy`. Which capability is it?<br />
 **A:** A resource.
 
-**Q:** How do I run the local MCP chatbot?<br />
-**A:** Start `server.py` in terminal 1, then run `mcp_chatbot.py` in terminal 2.
+**Q:** Why is the calculation a direct tool?<br />
+**A:** It is small, deterministic, and needed only by this chatbot.
 
 **Q:** What is the key relationship?<br />
-**A:** Tool calling chooses. Direct functions run in-process. MCP discovers and calls an external server.
+**A:** Tool calling chooses both. MCP is used when a capability should be shared or separately managed.
 
-Start small: run both chatbot versions with the same marks question.
+Start small: run one chatbot that uses both boundaries.
 
 <!-- notes
-Close by asking learners why an IDE assistant can reuse the MCP server but cannot reuse a function that lives only inside another chatbot process.
+Close by asking learners whether their next capability is application-private or shared across hosts. That is the practical decision point.
 -->
