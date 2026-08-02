@@ -29,6 +29,11 @@ export default defineConfig({
           items: [{ autogenerate: { directory: 'llm-foundations' } }],
         },
         {
+          label: 'LLM pretraining',
+          collapsed: true,
+          items: [{ autogenerate: { directory: 'llm-pretraining' } }],
+        },
+        {
           label: 'Retrieval & RAG',
           collapsed: true,
           items: [{ autogenerate: { directory: 'retrieval-rag' } }],

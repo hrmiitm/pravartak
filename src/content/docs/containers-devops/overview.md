@@ -2,6 +2,7 @@
 title: Containers & DevOps
 description: Placeholder outline for containers, Compose, CI/CD, and sandboxing.
 sidebar:
+  label: Overview
   order: 1
 ---
 

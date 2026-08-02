@@ -73,6 +73,11 @@ body {
   font-size: .92rem;
 }
 
+.sl-markdown-content th,
+.sl-markdown-content td {
+  padding: .65rem 1rem;
+}
+
 .sl-markdown-content th { background: color-mix(in srgb, var(--sl-color-accent) 9%, var(--sl-color-gray-6)); }
 .sl-markdown-content tr:nth-child(even) { background: color-mix(in srgb, var(--sl-color-gray-6) 55%, transparent); }
 
