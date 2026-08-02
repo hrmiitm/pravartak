@@ -3,7 +3,7 @@ tools.py
 
 All tools used by the AI Assistant.
 """
-
+from apis.weather import get_weather
 import ast
 import operator
 import settings
@@ -87,22 +87,38 @@ def calculator(expression: str) -> str:
 @tool
 def weather(city: str) -> str:
     """
-    Dummy weather tool.
-
-    Replace with a real API later.
+    Get the current weather for a city.
     """
 
     if settings.LEARN_MODE:
         print("\n🛠 Current Node : ToolNode")
         print("⚙ Tool         : Weather")
-        print(f"📍 City         : {city}")
+        print(f"🌍 Looking up   : {city}")
 
-    result = f"It is currently sunny in {city}."
+    try:
 
-    if settings.LEARN_MODE:
-        print(f"📤 Output       : {result}")
+        weather = get_weather(city)
 
-    return result
+        result = (
+            f"Weather for {weather['city']}\n"
+            f"Condition: {weather['condition']}\n"
+            f"Temperature: {weather['temperature']}°C\n"
+            f"Feels Like: {weather['feels_like']}°C\n"
+            f"Humidity: {weather['humidity']}%\n"
+            f"Wind Speed: {weather['wind_speed']} km/h"
+        )
+
+        if settings.LEARN_MODE:
+            print("✅ API Call     : Successful")
+
+        return result
+
+    except Exception as e:
+
+        if settings.LEARN_MODE:
+            print("❌ API Error")
+
+        return str(e)
 
 
 # ==========================================================

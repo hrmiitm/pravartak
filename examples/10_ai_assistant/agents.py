@@ -5,6 +5,7 @@ All LangGraph nodes used by the AI Assistant.
 """
 from router import detect_intent
 import settings
+from config import llm
 
 from langchain_core.messages import (
     AIMessage,
