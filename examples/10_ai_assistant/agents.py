@@ -3,6 +3,7 @@ agents.py
 
 All LangGraph nodes used by the AI Assistant.
 """
+from router import detect_intent
 import settings
 
 from langchain_core.messages import (
@@ -11,13 +12,12 @@ from langchain_core.messages import (
     SystemMessage,
 )
 
-from config import llm
+
 from memory import (
     remember_name,
     get_name,
 )
 from prompts import (
-    SUPERVISOR_PROMPT,
     ASSISTANT_PROMPT,
 )
 from tools import TOOLS
@@ -33,51 +33,40 @@ assistant_llm = llm.bind_tools(TOOLS)
 # ==========================================================
 # Supervisor Node
 # ==========================================================
-
 def supervisor(state):
     """
     Supervisor Node
 
-    Decides which node should handle the user's request.
+    Fast deterministic intent router.
     """
 
     last_message = state["messages"][-1].content
-    text = last_message.lower()
+
+    intent = detect_intent(last_message)
 
     if settings.LEARN_MODE:
         print("\n" + "=" * 70)
         print("🧭 LANGGRAPH EXECUTION")
         print("=" * 70)
-        print(f"📍 Current Node : Supervisor")
+        print("📍 Current Node : Supervisor")
         print(f"📨 User Query   : {last_message}")
+        print(f"🎯 Intent       : {intent}")
 
-    # Memory routing
-    if (
-        "my name is" in text
-        or "what's my name" in text
-        or "what is my name" in text
-        or "remember" in text
-    ):
+    if intent == "memory":
 
         if settings.LEARN_MODE:
             print("✅ Decision     : Route → Memory Node")
 
-        return {"route": "memory"}
-
-    response = llm.invoke(
-        [
-            SystemMessage(content=SUPERVISOR_PROMPT),
-            state["messages"][-1],
-        ]
-    )
-
-    route = response.content.strip().lower()
+        return {
+            "route": "memory"
+        }
 
     if settings.LEARN_MODE:
-        print(f"✅ Decision     : Route → {route.title()} Node")
+        print("✅ Decision     : Route → Assistant Node")
 
-    return {"route": route}
-
+    return {
+        "route": "assistant"
+    }
   
 
 # ==========================================================
