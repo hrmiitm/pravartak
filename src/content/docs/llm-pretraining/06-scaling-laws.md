@@ -76,7 +76,7 @@ For a standard Transformer:
 $$\text{Total Training FLOPs } (C) \approx 6 \times N \times D$$
 
 ### H100 Hardware Estimate Example
-- 1 GPU H100 BF16 Peak = 1,000 TFLOP/s (10¹5 FLOP/s).
+- 1 GPU H100 BF16 Peak = 1,000 TFLOP/s ($10^{15}$ FLOP/s).
 - Realistic Model FLOPs Utilization (MFU) = 40% (400 TFLOP/s).
 - **Training 7B model on 1T tokens**:
 

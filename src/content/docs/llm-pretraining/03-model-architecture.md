@@ -62,7 +62,7 @@ Multi-Head Attention (MHA)        Multi-Query Attention (MQA)       Grouped-Quer
 | Attention Variant | Query Heads ($H_q$) | KV Heads ($H_{kv}$) | KV Cache Footprint | Downstream Quality |
 |---|---|---|---|---|
 | **Multi-Head (MHA)** | $H$ | $H$ | 100% (Baseline) | Baseline |
-| **Multi-Query (MQA)** | $H$ | 1 | $1/H$ (~12.5%) | Degradation in complex reasoning |
+| **Multi-Query (MQA)** | $H$ | $1$ | $1/H$ (~12.5%) | Degradation in complex reasoning |
 | **Grouped-Query (GQA)** | $H$ | $G = H/8$ | $1/8$ (12.5%) | Quality parity with MHA |
 
 :::tip
@@ -96,7 +96,7 @@ Standard FFNs use two projections with ReLU. Modern LLMs use **SwiGLU** (Shazeer
 
 $$\text{SwiGLU}(x) = \left( \text{Swish}(x W_1) \odot x W_3 \right) W_2$$
 
-Where $\text{Swish}(x) = x \cdot \sigma(\beta x)$.
+where $\text{Swish}(x) = x \cdot \sigma(\beta x)$.
 
 :::important
 SwiGLU uses **three** weight matrices ($W_1, W_2, W_3$) instead of two. To maintain equivalent parameter counts to a standard $4d$ FFN, the hidden dimension is set to $\frac{8}{3}d$ (rounded to nearest multiple of 256).

@@ -1,5 +1,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 
 const base = process.env.BASE_PATH || '/';
 const normalizedBase = base === '/' ? '/' : `/${base.replace(/^\/+|\/+$/g, '')}`;
@@ -13,6 +15,10 @@ export default defineConfig({
   base: normalizedBase,
   output: 'static',
   trailingSlash: 'always',
+  markdown: {
+    remarkPlugins: [remarkMath],
+    rehypePlugins: [rehypeKatex],
+  },
   integrations: [
     starlight({
       title: 'Pravartak',
@@ -72,6 +78,13 @@ export default defineConfig({
       head: [
         { tag: 'meta', attrs: { name: 'theme-color', content: '#07111f' } },
         { tag: 'meta', attrs: { property: 'og:type', content: 'website' } },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'stylesheet',
+            href: 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css',
+          },
+        },
       ],
     }),
   ],

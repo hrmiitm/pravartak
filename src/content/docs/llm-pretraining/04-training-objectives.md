@@ -43,7 +43,7 @@ $$\mathcal{L}_{\text{MLM}}(\theta) = -\sum_{i \in \mathcal{M}} \log P(x_i \mid x
 
 - **15% Masking Rule**: 80% `[MASK]`, 10% random token, 10% unchanged.
 - **Strength**: Unconstrained bidirectional context makes MLM exceptional for embeddings, classification, and extraction tasks.
-- **Limitation**: Inefficient for text generation ($~6.7\times$ lower per-token supervision than CLM).
+- **Limitation**: Inefficient for text generation ($\sim 6.7\times$ lower per-token supervision than CLM).
 
 ## 3. Fill-in-the-Middle (FIM) for Code
 
