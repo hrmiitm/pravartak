@@ -6,6 +6,8 @@ AI Assistant (Capstone)
 Run:
     python app.py
 """
+from database import initialize_database
+import time
 import settings
 
 from langchain_core.messages import (
@@ -29,7 +31,7 @@ print("2. Chat Mode (Normal Assistant)\n")
 mode = input("Select mode (1/2): ").strip()
 
 settings.LEARN_MODE = (mode == "1")
-
+initialize_database()
 print()
 print("=" * 70)
 
@@ -54,6 +56,7 @@ while True:
         break
 
     try:
+        start = time.perf_counter()
 
         result = app.invoke(
             {
@@ -64,6 +67,7 @@ while True:
                 "profile": {},
             }
         )
+        end = time.perf_counter()
 
         print("\nAssistant >")
 
@@ -80,9 +84,16 @@ while True:
 
             print("No response generated.")
 
+        if settings.LEARN_MODE:
+            print("\n" + "=" * 70)
+            print("📊 EXECUTION SUMMARY")
+            print("=" * 70)
+            print(f"⏱ Total Time : {end - start:.3f} sec")
+            print("=" * 70)
+            print()
+
     except Exception as e:
 
         print("\nError:")
         print(e)
 
-    print()

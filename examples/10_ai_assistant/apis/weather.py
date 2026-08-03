@@ -8,6 +8,27 @@ Weather service using:
 
 No LangChain code belongs here.
 """
+
+import time
+
+import httpx
+import settings
+
+from apis.exceptions import CityNotFoundError
+
+
+# ==========================================================
+# API URLs
+# ==========================================================
+
+GEOCODE_URL = "https://nominatim.openstreetmap.org/search"
+WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
+
+
+# ==========================================================
+# Weather Code Mapping
+# ==========================================================
+
 WEATHER_CODES = {
     0: "Clear Sky",
     1: "Mainly Clear",
@@ -26,17 +47,10 @@ WEATHER_CODES = {
     95: "Thunderstorm",
 }
 
-import httpx
 
-from apis.exceptions import (
-    CityNotFoundError,
-)
-
-
-GEOCODE_URL = "https://nominatim.openstreetmap.org/search"
-
-WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
-
+# ==========================================================
+# Shared HTTP Client
+# ==========================================================
 
 client = httpx.Client(
     timeout=10,
@@ -46,10 +60,19 @@ client = httpx.Client(
 )
 
 
+# ==========================================================
+# Geocoding
+# ==========================================================
+
 def geocode_city(city: str):
     """
     Convert a city name into latitude and longitude.
     """
+
+    if settings.LEARN_MODE:
+        print("\n🌍 Calling Nominatim API...")
+
+    start = time.perf_counter()
 
     response = client.get(
         GEOCODE_URL,
@@ -60,6 +83,11 @@ def geocode_city(city: str):
         },
     )
 
+    end = time.perf_counter()
+
+    if settings.LEARN_MODE:
+        print(f"⏱ Nominatim Time : {end - start:.3f} sec")
+
     response.raise_for_status()
 
     data = response.json()
@@ -69,15 +97,28 @@ def geocode_city(city: str):
             f"City '{city}' not found."
         )
 
-    return (
-        float(data[0]["lat"]),
-        float(data[0]["lon"]),
-    )
+    latitude = float(data[0]["lat"])
+    longitude = float(data[0]["lon"])
+
+    if settings.LEARN_MODE:
+        print(f"📍 Coordinates   : ({latitude}, {longitude})")
+
+    return latitude, longitude
+
+
+# ==========================================================
+# Weather API
+# ==========================================================
 
 def fetch_weather(latitude: float, longitude: float):
     """
     Fetch current weather from Open-Meteo.
     """
+
+    if settings.LEARN_MODE:
+        print("\n☁ Calling Open-Meteo API...")
+
+    start = time.perf_counter()
 
     response = client.get(
         WEATHER_URL,
@@ -94,13 +135,28 @@ def fetch_weather(latitude: float, longitude: float):
         },
     )
 
+    end = time.perf_counter()
+
+    if settings.LEARN_MODE:
+        print(f"⏱ Open-Meteo Time : {end - start:.3f} sec")
+
     response.raise_for_status()
+
+    if settings.LEARN_MODE:
+        print("✅ Weather data received.")
 
     return response.json()
 
+
+# ==========================================================
+# Complete Weather Pipeline
+# ==========================================================
+
 def get_weather(city: str):
     """
-    Complete weather pipeline.
+    Get the current weather for a city.
+
+    Returns a structured dictionary.
     """
 
     latitude, longitude = geocode_city(city)

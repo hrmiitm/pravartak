@@ -147,11 +147,15 @@ def memory_node(state):
 # Assistant Node
 # ==========================================================
 
+import time
+
 def assistant_node(state):
 
     if settings.LEARN_MODE:
         print("\n🤖 Current Node : Assistant")
         print("🧠 Action       : Thinking...")
+
+    start = time.perf_counter()
 
     response = assistant_llm.invoke(
         [
@@ -160,18 +164,20 @@ def assistant_node(state):
         ]
     )
 
+    end = time.perf_counter()
+
     if settings.LEARN_MODE:
+
+        print(f"⏱ Assistant Time: {end-start:.3f} sec")
 
         if response.tool_calls:
             print("🛠 Decision     : Tool Required")
-
         else:
             print("💬 Decision     : Respond Directly")
 
     return {
         "messages": [response]
     }
-
 
 # ==========================================================
 # Router
