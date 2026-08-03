@@ -39,6 +39,15 @@ CALCULATOR_PATTERNS = [
     r"\(",
 ]
 
+WIKIPEDIA_PATTERNS = [
+    r"\bwho is\b",
+    r"\btell me about\b",
+    r"\bhistory of\b",
+    r"\bwhen was\b",
+    r"\bwhere is\b",
+    r"\bwho invented\b",
+]
+
 
 # ==========================================================
 # Pattern Matcher
@@ -63,6 +72,7 @@ def detect_intent(text: str) -> str:
     memory
     weather
     calculator
+    wikipedia
     assistant
     """
 
@@ -76,5 +86,8 @@ def detect_intent(text: str) -> str:
 
     if _matches(CALCULATOR_PATTERNS, text):
         return "calculator"
+
+    if _matches(WIKIPEDIA_PATTERNS, text):
+        return "wikipedia"
 
     return "assistant"

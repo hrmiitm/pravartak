@@ -39,9 +39,10 @@ Rules:
 1. ALWAYS use the calculator tool for mathematics.
 
 2. ALWAYS use the weather tool for weather questions.
+3. ALWAYS use the wikipedia tool for questions about people, places, history, science, technology, or general knowledge.
 
-3. For everything else,
+4. For everything else,
 answer normally.
 
-4. Keep responses concise.
+5. Keep responses concise.
 """

@@ -3,6 +3,8 @@ tools.py
 
 All tools used by the AI Assistant.
 """
+
+from apis.wikipedia import search_wikipedia
 from apis.weather import get_weather
 import ast
 import operator
@@ -119,7 +121,23 @@ def weather(city: str) -> str:
             print("❌ API Error")
 
         return str(e)
+@tool
+def wikipedia(query: str) -> str:
+    """
+    Search Wikipedia for factual information.
+    """
 
+    if settings.LEARN_MODE:
+        print("\n🛠 Current Node : ToolNode")
+        print("⚙ Tool         : Wikipedia")
+        print(f"🔍 Searching    : {query}")
+
+    result = search_wikipedia(query)
+
+    if settings.LEARN_MODE:
+        print("📄 Summary Retrieved")
+
+    return result
 
 # ==========================================================
 # Register Tools
@@ -128,6 +146,7 @@ def weather(city: str) -> str:
 TOOLS = [
     calculator,
     weather,
+    wikipedia,
 ]
 
 tool_node = ToolNode(TOOLS)
