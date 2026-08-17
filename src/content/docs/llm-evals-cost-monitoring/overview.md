@@ -1,4 +1,6 @@
-# LLM Evaluation & Cost Monitoring
+---
+title : LLM Evaluation & Cost Monitoring
+---
 
 [📑 View Presentation](../../slides/llm-evals-and-cost-monitoring/LLM_evals_and_cost_monitoring_slides.pdf)
 ---
