@@ -1,5 +1,8 @@
+<<<<<<< HEAD
 # Dependencies
 node_modules/
+__pycache__/
+*.py[cod]
 
 # Build outputs
 dist/
@@ -21,7 +24,7 @@ dist/
 .env.*.local
 
 # Generated PDFs / Marp Slide Outputs
-public/slides/*.pdf
+public/slides/**/*.pdf
 
 # Logs
 *.log
@@ -49,3 +52,25 @@ desktop.ini
 *.njsproj
 *.sln
 *.swp
+=======
+# Virtual Environment
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment Variables
+.env
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS Files
+.DS_Store
+Thumbs.db
+>>>>>>> shambhavi
