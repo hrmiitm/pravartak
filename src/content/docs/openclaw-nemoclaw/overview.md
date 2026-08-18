@@ -941,6 +941,4 @@ OpenClaw makes advanced AI workflows feel accessible.
 
 ## Biggest Weakness
 
-Security.
-
-Giving an AI unrestricted access to a machine introduces serious risks.
+Security: Giving an AI unrestricted access to a machine introduces serious risks.
