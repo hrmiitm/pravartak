@@ -334,11 +334,22 @@ Instead of using a graphical interface, OpenClaw allows you to configure the ent
 
 ---
 
-# Chapter 5 — Telegram Integration
+# Chapter 5 — Communication Channel Setup - Telegram Integration
 
-Telegram is the easiest communication channel to configure. So we will use this one for this demonstration.
+Telegram is the easiest communication channel to configure. So we will use this one for this demonstration. 
 
 ---
+
+## Select the Channel as Telegram
+
+We will be using telegram to talk to our bot.
+
+![communicaation-channel1](./images/communication-channel.png)
+
+## Choose the Telegram Option
+
+![communicaation-channel2](./images/communication-channel2.png)
+
 
 ## Create a Telegram Bot
 
@@ -347,6 +358,8 @@ Search for:
 ```text
 @BotFather
 ```
+![Bot-Father](./images/bot-father.png)
+
 
 ---
 
@@ -358,6 +371,8 @@ Commands:
 /newbot
 ```
 
+![Bot-Father2](./images/bot-creation-1.png)
+
 ---
 
 ## Configure the Bot
@@ -365,7 +380,7 @@ Commands:
 ```text
 Name →  Pravartak
 
-Username → iitm_agentbot
+Username → iitm_agent_bot
 ```
 
 Requirements:
@@ -373,6 +388,9 @@ Requirements:
 ```text
 Username must end with "bot"
 ```
+
+![Bot-Father3](./images/botcreation.png)
+
 
 ---
 
@@ -387,6 +405,10 @@ Username must end with "bot"
 ## Connect OpenClaw to Telegram
 
 Paste the token into your OpenClaw terminal.
+
+
+![communicaation-channel4](./images/communication-channel3.png)
+
 
 ---
 
@@ -417,20 +439,11 @@ Gateway --> Telegram
 
 Telegram --> User
 ```
-
----
-
-## Screenshot Placeholder
-
-```markdown
-![Telegram Setup](./images/04_telegram_setup.png)
-```
-
 ---
 
 # Chapter 6 — Skills
 
-Skills extend an agent's capabilities.
+Skills extend an agent's capabilities. An agent skill is a reusable capability that you give to an AI agent so it can perform a specific task consistently.
 
 ---
 
@@ -442,11 +455,11 @@ OpenClaw provides a marketplace called:
 ClawHub
 ```
 
-The video mentions:
+Its estimate that there are more than 33,000 skills available in ClawHub Marketplace:
 
-```text
-33,000+ skills
-```
+
+![clawhub](./images/clawhub.png)
+
 
 ---
 
@@ -509,20 +522,20 @@ The agent:
 Example:
 
 ```text
-Visit networkchuck.coffee
+Visit iitm iitmpravartak.org.in and get me the screenshot of it
 ```
 
 The agent:
 
 - Opened a headless browser
 - Navigated to the website
-- Added a product to the cart
+- Captured the ScreenShot
 
 ---
 
 ## Security Warning
 
-The video states that approximately **12% of skills contained malware**.
+It is estimated that approximately **12% of skills contained malware**.
 
 Always verify skills before installation.
 
@@ -599,7 +612,7 @@ Report --> Manager
 
 # Chapter 8 — Memory System
 
-The memory system is one of OpenClaw's most interesting features.
+The memory system is one of OpenClaw's most interesting features. This is what makes OpenClaw best and this is why we can swap different AI models without forgetting everything and starting over.
 
 ---
 
@@ -648,6 +661,9 @@ Example:
 ```bash
 cat soul.md
 ```
+
+![soul-md](./images/soul-md.png)
+
 
 ---
 
@@ -709,7 +725,7 @@ DailyJournal --> FutureSessions
 
 # Chapter 9 — Security
 
-The creator repeatedly emphasizes security.
+The security is what the biggest concern is with these AI Agents. Because they are like autonomus systems they can click type navigate so it posses a strong security risk.
 
 ---
 
@@ -734,57 +750,6 @@ openclaw security audit --deep
 ```bash
 openclaw security audit --fix
 ```
-
----
-
-## Verify the Web UI
-
-Test:
-
-```text
-http://YOUR_IP:18789
-```
-
-If inaccessible:
-
-```text
-Good.
-```
-
-The UI should remain private.
-
----
-
-## SSH Tunnel
-
-Use SSH tunneling instead of exposing the interface publicly.
-
----
-
-## Generate a Gateway Token
-
-```bash
-openclaw config
-```
-
-Navigate:
-
-```text
-Local Machine → Gateway → Token
-```
-
----
-
-## Enable the Firewall
-
-Allow SSH only.
-
-```text
-Allow: 22
-
-Block: Everything else
-```
-
 ---
 
 ## Tool Profiles
@@ -799,7 +764,7 @@ openclaw config get tools.profile
 
 ### Coding Profile
 
-Limited access:
+Limited access: Because we dont want our agent to run malicious code.
 
 - Files
 - Terminal
@@ -824,7 +789,7 @@ Check:
 openclaw config get tools.exec
 ```
 
-Options:
+Options: These are the options which we can use for any tool permissions
 
 ```text
 allowlist
@@ -889,8 +854,6 @@ Log --> Execute
 
 # Chapter 10 — NemoClaw
 
-According to the video:
-
 > NVIDIA describes OpenClaw as an operating system for personal AI.
 
 NVIDIA responded by creating:
@@ -902,7 +865,7 @@ NemoClaw
 The idea:
 
 ```text
-Personal AI Operating System
+Personal AI Operating System (Whole Sandbox)
 ```
 
 ---
@@ -981,39 +944,3 @@ OpenClaw makes advanced AI workflows feel accessible.
 Security.
 
 Giving an AI unrestricted access to a machine introduces serious risks.
-
----
-
-## Key Commands Cheat Sheet
-
-```bash
-ps aux | grep claw
-
-cd ~/.openclaw
-
-cat soul.md
-
-cat identity.md
-
-cat memory.md
-
-openclaw security audit
-
-openclaw security audit --deep
-
-openclaw security audit --fix
-
-openclaw config
-
-openclaw gateway restart
-
-openclaw config get tools.profile
-
-openclaw config set tools.profile full
-
-openclaw config get tools.exec
-
-npm install -g clawhub
-
-clawhub install word.docx
-```
