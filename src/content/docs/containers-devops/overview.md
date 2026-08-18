@@ -1,8 +1,17 @@
 ---
 title: Containers & DevOps
-description: Placeholder outline for containers, Compose, CI/CD, and sandboxing.
+description: Beginner-friendly automation, delivery, and deployment lessons.
 sidebar:
   order: 1
 ---
 
-This section builds an image, persists data with volumes, connects services with Compose, publishes safely, automates tests with GitHub Actions, and deploys a demo to Hugging Face Spaces.
+# Containers & DevOps
+
+Learn one small idea at a time, then practise it locally.
+
+- **Crontab** — run a command on a schedule.
+- **Loop engineering** — improve software through small, measured changes.
+- **GitHub Actions CI/CD** — check code automatically before deployment.
+- **Hugging Face Spaces** — publish a small FastAPI demo.
+
+Each lesson has a separate slide deck for quick review.
