@@ -168,9 +168,9 @@ curl -fsSL https://openclaw.ai/install.sh | bash
 
 Documentation changes frequently, so always use the latest installation command.
 
-```markdown
-![OpenClaw Installation](./images/02_installation.png)
-```
+
+![OpenClaw Installation](./images/Installation-command.png)
+
 
 ---
 
@@ -288,12 +288,15 @@ Options include:
 
 You can use:
 
+![AI Selection](./images/AI-selector.png)
+---
+
 ### Option 1
 
 API Key
 
 ```text
-Pay as you go
+sk-!2@434.............  (YOUR API KEY)
 ```
 
 ### Option 2
@@ -304,59 +307,36 @@ Local AI model using Ollama
 completely free forever and offline
 ```
 
+But for this learning journey we will use the OpenAI API key as most people dont have the required hardware for ollama.
+
+
+![AI Selection-2](./images/AI-Model%20Selection-1.png)
+
+
 ---
 
 ## Model Selection
 
-The video selects:
+After entering the OpenAI as your provider we have to select the model of it.
+
+
+![AI Selection-3](./images/AI-Model%20Selection-2.png)
 
 ```text
-GPT-5.4
+we will keep the current model GPT 5.4
 ```
-
----
-
-## Hook Configuration
-
-Enable:
-
-- Bootstrap
-- Command Logger
-- Session Memory
 
 ---
 
 ## TUI (Terminal User Interface)
 
-Instead of using a graphical interface, OpenClaw allows you to configure the entire agent through a terminal conversation.
-
----
-
-## Agent Identity
-
-Example configuration:
-
-```text
-Agent: Terry Crews
-
-User: NetworkChuck fan
-
-Personality: Chaotic
-```
-
----
-
-## Screenshot Placeholder
-
-```markdown
-![Agent Configuration](./images/03_agent_configuration.png)
-```
+Instead of using a graphical interface, OpenClaw allows you to configure the entire agent through a terminal conversation. So we will be using the TUI for this learning journey.
 
 ---
 
 # Chapter 5 — Telegram Integration
 
-Telegram is the easiest communication channel to configure.
+Telegram is the easiest communication channel to configure. So we will use this one for this demonstration.
 
 ---
 

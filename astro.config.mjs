@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import mermaid from 'astro-mermaid';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
@@ -70,6 +71,7 @@ export default defineConfig({
     },
   },
   integrations: [
+    mermaid(),
     starlight({
       title: 'Pravartak',
       description: 'A practical AI, cloud, and DevOps learning path.',
