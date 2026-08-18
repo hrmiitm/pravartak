@@ -14,12 +14,11 @@ import re
 # ==========================================================
 # Intent Patterns
 # ==========================================================
-
 MEMORY_PATTERNS = [
-    r"\bmy name is\b",
+    r"\bremember our\b",
+    r"\bwhat is our\b",
+    r"\bwhat's our\b",
     r"\bremember\b",
-    r"\bwhat(?:'s| is) my name\b",
-    r"\bwhat do you remember\b",
 ]
 
 WEATHER_PATTERNS = [
@@ -46,6 +45,15 @@ WIKIPEDIA_PATTERNS = [
     r"\bwhen was\b",
     r"\bwhere is\b",
     r"\bwho invented\b",
+]
+
+SECURITY_PATTERNS = [
+    r"\bcve-\d{4}-\d{4,}\b",
+    r"\bvulnerability\b",
+    r"\bsecurity advisory\b",
+    r"\bcvss\b",
+    r"\bexploit\b",
+    r"\bseverity\b",
 ]
 
 
@@ -78,11 +86,16 @@ def detect_intent(text: str) -> str:
 
     text = text.lower()
 
+
+
     if _matches(MEMORY_PATTERNS, text):
         return "memory"
 
     if _matches(WEATHER_PATTERNS, text):
         return "weather"
+
+    if _matches(SECURITY_PATTERNS, text):
+        return "security"
 
     if _matches(CALCULATOR_PATTERNS, text):
         return "calculator"
