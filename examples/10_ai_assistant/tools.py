@@ -6,12 +6,16 @@ All tools used by the AI Assistant.
 
 from apis.wikipedia import search_wikipedia
 from apis.weather import get_weather
+from apis.vulnerabilities import get_vulnerability
+
 import ast
 import operator
+import json
 import settings
 
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolNode
+
 
 # ==========================================================
 # Safe Calculator
@@ -99,15 +103,15 @@ def weather(city: str) -> str:
 
     try:
 
-        weather = get_weather(city)
+        weather_data = get_weather(city)
 
         result = (
-            f"Weather for {weather['city']}\n"
-            f"Condition: {weather['condition']}\n"
-            f"Temperature: {weather['temperature']}°C\n"
-            f"Feels Like: {weather['feels_like']}°C\n"
-            f"Humidity: {weather['humidity']}%\n"
-            f"Wind Speed: {weather['wind_speed']} km/h"
+            f"Weather for {weather_data['city']}\n"
+            f"Condition: {weather_data['condition']}\n"
+            f"Temperature: {weather_data['temperature']}°C\n"
+            f"Feels Like: {weather_data['feels_like']}°C\n"
+            f"Humidity: {weather_data['humidity']}%\n"
+            f"Wind Speed: {weather_data['wind_speed']} km/h"
         )
 
         if settings.LEARN_MODE:
@@ -121,6 +125,12 @@ def weather(city: str) -> str:
             print("❌ API Error")
 
         return str(e)
+
+
+# ==========================================================
+# Wikipedia Tool
+# ==========================================================
+
 @tool
 def wikipedia(query: str) -> str:
     """
@@ -132,12 +142,70 @@ def wikipedia(query: str) -> str:
         print("⚙ Tool         : Wikipedia")
         print(f"🔍 Searching    : {query}")
 
-    result = search_wikipedia(query)
+    try:
+
+        result = search_wikipedia(query)
+
+        if settings.LEARN_MODE:
+            print("📄 Summary Retrieved")
+
+        return result
+
+    except Exception as e:
+
+        if settings.LEARN_MODE:
+            print("❌ Wikipedia API Error")
+
+        return str(e)
+
+
+# ==========================================================
+# Vulnerability Intelligence Tool
+# ==========================================================
+
+@tool
+def vulnerability_lookup(cve_id: str) -> str:
+    """
+    Look up a CVE vulnerability and return structured
+    vulnerability intelligence as JSON.
+    """
 
     if settings.LEARN_MODE:
-        print("📄 Summary Retrieved")
+        print("\n🔐 Current Node : ToolNode")
+        print("⚙ Tool         : Vulnerability Lookup")
+        print(f"🔐 CVE          : {cve_id}")
 
-    return result
+    try:
+
+        vulnerability = get_vulnerability(cve_id)
+
+        result = {
+            "cve_id": vulnerability["cve_id"],
+            "severity": vulnerability["severity"],
+            "cvss_score": vulnerability["cvss_score"],
+            "published": vulnerability["published"],
+            "last_modified": vulnerability["last_modified"],
+            "description": vulnerability["description"],
+            "source": "NVD",
+        }
+
+        if settings.LEARN_MODE:
+            print("✅ Vulnerability data retrieved.")
+
+        return json.dumps(result)
+
+    except Exception as exc:
+
+        if settings.LEARN_MODE:
+            print("❌ Vulnerability lookup failed.")
+
+        return json.dumps({
+            "cve_id": cve_id,
+            "source": "NVD",
+            "status": "error",
+            "error": str(exc),
+        })
+
 
 # ==========================================================
 # Register Tools
@@ -147,6 +215,8 @@ TOOLS = [
     calculator,
     weather,
     wikipedia,
+    vulnerability_lookup,
 ]
+
 
 tool_node = ToolNode(TOOLS)
