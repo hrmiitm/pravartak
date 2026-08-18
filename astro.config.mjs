@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import mermaid from 'astro-mermaid';
 
 const base = process.env.BASE_PATH || '/';
 const normalizedBase = base === '/' ? '/' : `/${base.replace(/^\/+|\/+$/g, '')}`;
@@ -14,6 +15,7 @@ export default defineConfig({
   output: 'static',
   trailingSlash: 'always',
   integrations: [
+    mermaid(),
     starlight({
       title: 'Pravartak',
       description: 'A practical AI, cloud, and DevOps learning path.',
