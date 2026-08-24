@@ -6,9 +6,7 @@ sidebar:
 ---
 
 
-# DeepSeek Harness 
-
-> **DeepSeek Harness (`dsh`)** is an open-source agent harness from DeepSeek AI. Its central idea is simple: **the model is only one part of an agent; the harness supplies the environment, tools, memory/session machinery, permissions, skills, and execution loop that lets the model actually work.**
+> In this section we will learn about **DeepSeek Harness (`dsh`)** it is an open-source agent harness from DeepSeek AI. Its central idea is simple: **the model is only one part of an agent; the harness supplies the environment, tools, memory/session machinery, permissions, skills, and execution loop that lets the model actually work.**
 
 
 ---
