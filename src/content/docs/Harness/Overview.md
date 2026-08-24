@@ -76,7 +76,7 @@ A harness provides those pieces.
 
 ---
 
-# 2. What Is an Agent Harness?
+## 2. What Is an Agent Harness?
 
 An **agent harness** is the software layer responsible for turning an LLM into a usable agent.
 
@@ -132,7 +132,7 @@ The model is the "soul"; the harness keeps the agent working in a real environme
 
 ---
 
-# 3. Why DeepSeek Harness?
+## 3. Why DeepSeek Harness?
 
 DeepSeek Harness is interesting because it is designed around a particularly strong architectural idea:
 
@@ -160,7 +160,7 @@ That makes DeepSeek Harness particularly interesting if you want to understand *
 
 ---
 
-# 4. Why "Everything Is a Plugin" Matters
+## 4. Why "Everything Is a Plugin" Matters
 
 Imagine a traditional application:
 
@@ -212,7 +212,7 @@ This is much closer to an operating-system/plugin architecture than a single mon
 
 ---
 
-# 5. What Is Cordis?
+## 5. What Is Cordis?
 
 **Cordis** is the plugin framework/kernel used by DeepSeek Harness.
 
@@ -247,7 +247,7 @@ The important idea is that plugins do not need to modify a giant central loop ju
 
 ---
 
-# 6. The DeepSeek Harness Architecture
+## 6. The DeepSeek Harness Architecture
 
 At a high level:
 
@@ -287,7 +287,7 @@ The actual architecture is more modular than this diagram but it is good to unde
 
 ---
 
-# 7. What Can DeepSeek Harness Do?
+## 7. What Can DeepSeek Harness Do?
 
 Once configured, a Harness agent can perform multi-step tasks such as:
 
@@ -327,7 +327,7 @@ The important point is that the harness coordinates this process.
 
 ---
 
-# 8. Installing DeepSeek Harness
+## 8. Installing DeepSeek Harness
 
 DeepSeek Harness provides an npm-based quick start.
 
@@ -380,7 +380,7 @@ Web UI
 
 ---
 
-# 9. Running DeepSeek Harness
+## 9. Running DeepSeek Harness
 
 The simplest run is:
 
@@ -414,7 +414,7 @@ The Harness can then use the available capabilities to perform the task.
 
 ---
 
-# 10. Workspace: Where Does the Agent Work?
+## 10. Workspace: Where Does the Agent Work?
 
 The Harness needs a workspace.
 
@@ -439,7 +439,7 @@ The harness decides what environment the agent can interact with.
 
 ---
 
-# 11. Configuring a Model
+## 11. Configuring a Model
 
 Open:
 
@@ -455,7 +455,7 @@ The model configuration system also supports other providers and custom OpenAI-c
 
 ---
 
-# 12. Model Provider vs Model
+## 12. Model Provider vs Model
 
 This distinction matters.
 
@@ -490,7 +490,7 @@ DeepSeek Harness separates the model-facing interface from the provider-specific
 
 ---
 
-# 13. Can We Use Another Model?
+## 13. Can We Use Another Model?
 
 Yes, this is one of the interesting consequences of the plugin architecture.
 
@@ -525,9 +525,11 @@ Supported modalities/capabilities
 ```
 
 Some endpoints expose `/models`, allowing automatic discovery; others require models to be entered manually.
+
+
 ---
 
-# 14. What Is a Skill?
+## 14. What Is a Skill?
 
 A **skill** is reusable instruction/context that teaches an agent how to perform a particular kind of work.
 
@@ -553,7 +555,7 @@ It is closer to a reusable operating procedure for the agent.
 
 ---
 
-# 15. Skill vs Tool
+## 15. Skill vs Tool
 
 This distinction is extremely important.
 
@@ -600,7 +602,7 @@ Skill → instructions for assembling the furniture
 
 ---
 
-# 16. How Skills Work Internally
+## 16. How Skills Work Internally
 
 DeepSeek Harness has a skill capability family.
 
@@ -643,7 +645,7 @@ The directory form is useful when the skill needs supporting files.
 
 ---
 
-# 17. Where Do Skills Live?
+## 17. Where Do Skills Live?
 
 The filesystem provider can scan locations including:
 
@@ -690,7 +692,7 @@ User-level skills are useful when you want to reuse the skill across projects.
 
 ---
 
-# 18. Creating Your First Skill
+## 18. Creating Your First Skill
 
 Create:
 
@@ -733,7 +735,7 @@ The name must use **kebab-case**.
 
 
 
-# 19. A Better Real-World Skill
+## 19. A Better Real-World Skill
 
 For example, create:
 
@@ -811,7 +813,7 @@ Now the agent has a reusable research workflow.
 
 ---
 
-# 20. Plugins vs Skills
+## 20. Plugins vs Skills
 
 Do not confuse these.
 
@@ -855,7 +857,7 @@ Plugin
 
 ---
 
-# 21. Why the Plugin Architecture Is Powerful
+## 21. Why the Plugin Architecture Is Powerful
 
 Suppose you want a new model provider.
 
@@ -903,7 +905,7 @@ This is the core architectural advantage.
 
 ---
 
-# 22. A Practical Mental Model
+## 22. A Practical Mental Model
 
 Remember these four layers:
 
@@ -959,7 +961,7 @@ A better conceptual diagram is:
 
 ---
 
-# 23. One Complete Example
+## 23. One Complete Example
 
 Suppose you have:
 
@@ -1033,7 +1035,7 @@ Session
 
 ---
 
-# 24. DeepSeek Harness in One Sentence
+## 24. DeepSeek Harness in One Sentence
 
 If you remember only one thing:
 
@@ -1045,7 +1047,7 @@ And if you remember two:
 
 ---
 
-# 25. Architecture Cheat Sheet
+## 25. Architecture Cheat Sheet
 
 | Concept | Meaning |
 |---|---|
@@ -1065,7 +1067,7 @@ And if you remember two:
 
 ---
 
-# 26. Useful Official Resources
+## 26. Useful Official Resources
 
 - DeepSeek Harness: https://github.com/deepseek-ai/deepseek-harness
 - DeepSeek Harness website: https://deepseek.com/harness/en/
@@ -1078,7 +1080,7 @@ And if you remember two:
 
 ---
 
-# 27. Final Mental Picture
+## 27. Final Mental Picture
 
 ```text
                          USER
