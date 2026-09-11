@@ -183,9 +183,16 @@ def vulnerability_lookup(cve_id: str) -> str:
             "cve_id": vulnerability["cve_id"],
             "severity": vulnerability["severity"],
             "cvss_score": vulnerability["cvss_score"],
+            "cvss_version": vulnerability["cvss_version"],
             "published": vulnerability["published"],
             "last_modified": vulnerability["last_modified"],
             "description": vulnerability["description"],
+            "affected_software": vulnerability["affected_software"],
+            "affected_versions": vulnerability["affected_versions"],
+            "affected_products": vulnerability.get(
+                "affected_products",
+                []
+            ),
             "source": "NVD",
         }
 
