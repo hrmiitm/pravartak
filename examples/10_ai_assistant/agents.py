@@ -1,20 +1,20 @@
 """
-agents.py
-
 All LangGraph nodes used by the AI Assistant.
 """
-from router import detect_intent
 
+import json
+import re
+import time
+
+from router import detect_intent
 
 import settings
 from config import llm
 
 from langchain_core.messages import (
     AIMessage,
-    HumanMessage,
     SystemMessage,
 )
-
 
 from memory import (
     remember,
@@ -22,123 +22,15 @@ from memory import (
     get_organization_context,
 )
 
-# ==========================================================
-# Organizational Relevance Analysis
-# ==========================================================
+from inventory import get_demo_inventory
 
-def analyze_organizational_relevance(
-    description: str,
-    organization_context: dict,
-):
-    """
-    Determine whether the vulnerability evidence appears
-    relevant to the organization's known technologies.
-
-    This is deliberately conservative.
-
-    RELEVANT:
-        A known organization technology is explicitly
-        mentioned in the vulnerability description.
-
-    NOT_RELEVANT:
-        The description contains identifiable technology
-        information, but none matches known organization
-        technologies.
-
-    UNKNOWN:
-        There is not enough evidence to establish relevance.
-    """
-
-    if not description:
-        return {
-            "status": "UNKNOWN",
-            "reason": "The vulnerability description is empty.",
-            "matched_assets": [],
-        }
-
-    description_lower = description.lower()
-
-    # ------------------------------------------------------
-    # Known organization technologies
-    # ------------------------------------------------------
-
-    known_assets = []
-
-    for key in [
-        "firewall_vendor",
-        "siem_platform",
-    ]:
-
-        value = organization_context.get(key)
-
-        if value:
-            known_assets.append(
-                value.strip()
-            )
-
-    # ------------------------------------------------------
-    # No known technologies
-    # ------------------------------------------------------
-
-    if not known_assets:
-
-        return {
-            "status": "UNKNOWN",
-            "reason": (
-                "No organization technologies are currently "
-                "stored in memory."
-            ),
-            "matched_assets": [],
-        }
-
-    # ------------------------------------------------------
-    # Match known technologies against CVE description
-    # ------------------------------------------------------
-
-    matched_assets = []
-
-    for asset in known_assets:
-
-        if asset.lower() in description_lower:
-
-            matched_assets.append(asset)
-
-    # ------------------------------------------------------
-    # Relevant
-    # ------------------------------------------------------
-
-    if matched_assets:
-
-        return {
-            "status": "RELEVANT",
-            "reason": (
-                "The vulnerability description explicitly "
-                "mentions technology used by the organization."
-            ),
-            "matched_assets": matched_assets,
-        }
-
-    # ------------------------------------------------------
-    # No direct match
-    #
-    # We intentionally return UNKNOWN rather than
-    # NOT_RELEVANT because absence of a keyword does not
-    # prove that the organization is unaffected.
-    # ------------------------------------------------------
-
-    return {
-        "status": "UNKNOWN",
-        "reason": (
-            "The available vulnerability evidence does not "
-            "establish a connection to the organization's "
-            "known technologies."
-        ),
-        "matched_assets": [],
-    }
-
-from prompts import (
-    ASSISTANT_PROMPT,
+from investigation_engine import (
+    generate_security_recommendation,
+    calculate_contextual_priority,
+    build_investigation,
 )
+
+from prompts import ASSISTANT_PROMPT
 from tools import TOOLS
 
 
@@ -149,9 +41,20 @@ from tools import TOOLS
 assistant_llm = llm.bind_tools(TOOLS)
 
 
+# Used by the grounding guard in assistant_node: detects a CVE
+# identifier anywhere in text (unanchored, unlike the stricter
+# full-match validator in apis/vulnerabilities.py, which is used
+# to validate a CVE ID supplied as a tool argument).
+CVE_MENTION_PATTERN = re.compile(
+    r"\bCVE-\d{4}-\d{4,}\b",
+    re.IGNORECASE,
+)
+
+
 # ==========================================================
 # Supervisor Node
 # ==========================================================
+
 def supervisor(state):
     """
     Supervisor Node
@@ -164,9 +67,11 @@ def supervisor(state):
     intent = detect_intent(last_message)
 
     if settings.LEARN_MODE:
+
         print("\n" + "=" * 70)
         print("🧭 LANGGRAPH EXECUTION")
         print("=" * 70)
+
         print("📍 Current Node : Supervisor")
         print(f"📨 User Query   : {last_message}")
         print(f"🎯 Intent       : {intent}")
@@ -174,19 +79,29 @@ def supervisor(state):
     if intent == "memory":
 
         if settings.LEARN_MODE:
-            print("✅ Decision     : Route → Memory Node")
+            print(
+                "✅ Decision     : "
+                "Route → Memory Node"
+            )
 
         return {
             "route": "memory"
         }
 
     if settings.LEARN_MODE:
-        print("✅ Decision     : Route → Assistant Node")
+        print(
+            "✅ Decision     : "
+            "Route → Assistant Node"
+        )
 
     return {
         "route": "assistant"
     }
-  
+
+
+# ==========================================================
+# Memory Node
+# ==========================================================
 
 def memory_node(state):
 
@@ -198,15 +113,22 @@ def memory_node(state):
 
     # ======================================================
     # Store organization information
-    # Example:
-    # Remember our firewall vendor is Palo Alto.
     # ======================================================
 
-    if text.startswith("remember our ") and " is " in text:
+    if (
+        text.startswith("remember our ")
+        and " is " in text
+    ):
 
-        before, value = last_message.split(" is ", 1)
+        before, value = last_message.split(
+            " is ",
+            1,
+        )
 
-        key = before[len("Remember our "):].strip()
+        key = before[
+            len("Remember our "):
+        ].strip()
+
         key = (
             key
             .rstrip("?.!")
@@ -217,12 +139,18 @@ def memory_node(state):
         if key == "company":
             key = "organization"
 
-        value = value.strip().rstrip("?.!")
+        value = value.strip().rstrip("? .!")
 
         if settings.LEARN_MODE:
-            print(f"💾 Action       : Store {key} = {value}")
+            print(
+                f"💾 Action       : "
+                f"Store {key} = {value}"
+            )
 
-        remember(key, value)
+        remember(
+            key,
+            value,
+        )
 
         return {
             "messages": [
@@ -237,31 +165,52 @@ def memory_node(state):
 
     # ======================================================
     # Retrieve organization information
-    # Examples:
-    # What is our firewall vendor?
-    # What's our SIEM platform?
     # ======================================================
 
-    if text.startswith("what is our ") or text.startswith("what's our "):
+    if (
+        text.startswith("what is our ")
+        or text.startswith("what's our ")
+    ):
 
         if text.startswith("what is our "):
-            key = last_message[len("What is our "):]
-        else:
-            key = last_message[len("What's our "):]
 
-        key = key.strip().rstrip("?.!").replace(" ", "_").lower()
+            key = last_message[
+                len("What is our "):
+            ]
+
+        else:
+
+            key = last_message[
+                len("What's our "):
+            ]
+
+        key = (
+            key
+            .strip()
+            .rstrip("?.!")
+            .replace(" ", "_")
+            .lower()
+        )
 
         if settings.LEARN_MODE:
-            print(f"🔍 Action       : Retrieve {key}")
+            print(
+                f"🔍 Action       : "
+                f"Retrieve {key}"
+            )
 
-        value = recall(key)
+        value = recall(
+            key
+        )
 
         if value:
+
             return {
                 "messages": [
                     AIMessage(
                         content=(
-                            f"Our {key.replace('_', ' ')} is {value}."
+                            f"Our "
+                            f"{key.replace('_', ' ')} "
+                            f"is {value}."
                         )
                     )
                 ]
@@ -271,7 +220,8 @@ def memory_node(state):
             "messages": [
                 AIMessage(
                     content=(
-                        f"I don't have any information about our "
+                        f"I don't have any information "
+                        f"about our "
                         f"{key.replace('_', ' ')} yet."
                     )
                 )
@@ -298,14 +248,15 @@ def memory_node(state):
 # Assistant Node
 # ==========================================================
 
-import time
-
-
 def assistant_node(state):
 
     if settings.LEARN_MODE:
-        print("\n🤖 Current Node : Assistant")
-        print("🧠 Action       : Thinking...")
+        print(
+            "\n🤖 Current Node : Assistant"
+        )
+        print(
+            "🧠 Action       : Thinking..."
+        )
 
     start = time.perf_counter()
 
@@ -313,11 +264,18 @@ def assistant_node(state):
     # Build investigation context
     # ------------------------------------------------------
 
-    investigation = state.get("investigation")
+    investigation = state.get(
+        "investigation"
+    )
 
     investigation_context = ""
 
     if investigation:
+
+        recommendations = investigation.get(
+            "recommendations",
+            []
+        )
 
         investigation_context = f"""
 
@@ -332,14 +290,50 @@ Severity:
 CVSS Score:
 {investigation.get("cvss_score", "N/A")}
 
+CVSS Version:
+{investigation.get("cvss_version", "N/A")}
+
+Affected Software:
+{investigation.get("affected_software", [])}
+
+Affected Versions:
+{investigation.get("affected_versions", [])}
+
 Risk Assessment:
 {investigation.get("risk_assessment", "N/A")}
 
+Contextual Priority:
+{investigation.get("contextual_priority", {}).get("priority_label", "N/A")} ({investigation.get("contextual_priority", {}).get("priority_score", "N/A")}/100)
+
+Contextual Priority Basis:
+{investigation.get("contextual_priority", {}).get("priority_basis", "N/A")}
+
 Evidence Source:
-{investigation.get("source", "N/A")}
+{investigation.get("evidence", {}).get("vulnerability_source", "N/A")}
+
+Evidence Provenance:
+{investigation.get("evidence", {})}
 
 Status:
 {investigation.get("status", "N/A")}
+
+Organizational Relevance:
+{investigation.get("organizational_relevance", "UNKNOWN")}
+
+Applicability Confidence:
+{investigation.get("applicability_confidence", "N/A")}
+
+Applicability Evidence:
+{investigation.get("applicability_evidence", [])}
+
+Missing Evidence:
+{investigation.get("missing_evidence", [])}
+
+Relevance Reason:
+{investigation.get("relevance_reason", "N/A")}
+
+Matched Assets:
+{investigation.get("matched_assets", [])}
 
 Description:
 {investigation.get("description", "N/A")}
@@ -347,8 +341,22 @@ Description:
 Analysis:
 {investigation.get("analysis", "N/A")}
 
+Recommended Actions:
+{recommendations}
+
 Use this structured investigation state when answering the user.
+
 Do not invent information that is not present in the evidence.
+
+When recommended actions are available, use them when answering
+questions about what the organization should do.
+
+When applicability is UNKNOWN, clearly communicate that this means
+there is insufficient evidence to establish whether the organization
+is affected. Do not interpret UNKNOWN as NOT_RELEVANT.
+
+When explaining applicability, mention important missing evidence
+when relevant.
 """
 
     # ------------------------------------------------------
@@ -358,12 +366,91 @@ Do not invent information that is not present in the evidence.
     response = assistant_llm.invoke(
         [
             SystemMessage(
-                content=ASSISTANT_PROMPT
-                + investigation_context
+                content=(
+                    ASSISTANT_PROMPT
+                    + investigation_context
+                )
             ),
             *state["messages"],
         ]
     )
+
+    # --------------------------------------------------
+    # Grounding guard
+    #
+    # If the user's message references a specific CVE, and the
+    # assistant chose to respond directly (no tool call) without
+    # any investigation evidence existing yet in this turn, that
+    # response can only be based on the model's own training
+    # knowledge rather than verified NVD evidence. This is the
+    # exact failure mode item 23 of the handoff describes: the
+    # model stating vulnerability facts (e.g. affected software)
+    # that are not backed by structured evidence.
+    #
+    # Rather than trying to detect hallucinated facts in free
+    # text (fragile), this checks something structural: was a
+    # CVE mentioned, and does no grounding exist for it yet.
+    # When both are true, retry once with an explicit reminder
+    # forcing tool use. This adds one extra LLM call only in
+    # this rare case — the normal working path (tool called on
+    # the first try) is unaffected.
+    # --------------------------------------------------
+
+    if (
+        not response.tool_calls
+        and not investigation
+        and state["messages"]
+    ):
+
+        last_user_text = (
+            state["messages"][-1].content
+            or ""
+        )
+
+        if CVE_MENTION_PATTERN.search(
+            last_user_text
+        ):
+
+            if settings.LEARN_MODE:
+
+                print(
+                    "\n⚠ Grounding Guard : "
+                    "CVE mentioned, no tool called, "
+                    "no evidence yet. Forcing retrieval retry."
+                )
+
+            grounding_reminder = SystemMessage(
+                content=(
+                    ASSISTANT_PROMPT
+                    + investigation_context
+                    + "\n\nIMPORTANT: The user's message "
+                    "references a specific CVE identifier. "
+                    "You must call the vulnerability_lookup "
+                    "tool for that CVE before answering. Do "
+                    "not state any vulnerability facts "
+                    "(severity, CVSS score, affected software, "
+                    "or affected versions) from memory."
+                )
+            )
+
+            response = assistant_llm.invoke(
+                [
+                    grounding_reminder,
+                    *state["messages"],
+                ]
+            )
+
+            if (
+                settings.LEARN_MODE
+                and not response.tool_calls
+            ):
+
+                print(
+                    "⚠ Grounding Guard : "
+                    "Retry still did not call the tool. "
+                    "Response may be ungrounded — treat with "
+                    "caution."
+                )
 
     end = time.perf_counter()
 
@@ -371,20 +458,28 @@ Do not invent information that is not present in the evidence.
 
         print(
             f"⏱ Assistant Time: "
-            f"{end-start:.3f} sec"
+            f"{end - start:.3f} sec"
         )
 
         if response.tool_calls:
-            print("🛠 Decision     : Tool Required")
+
+            print(
+                "🛠 Decision     : "
+                "Tool Required"
+            )
+
         else:
-            print("💬 Decision     : Respond Directly")
+
+            print(
+                "💬 Decision     : "
+                "Respond Directly"
+            )
 
     return {
-        "messages": [response]
+        "messages": [
+            response
+        ]
     }
-
-
-
 
 
 # ==========================================================
@@ -402,20 +497,25 @@ def security_investigation_node(state):
     It reuses the evidence already retrieved by ToolNode.
     """
 
-    import json
-
     if settings.LEARN_MODE:
-        print("\n🔐 Current Node : Security Investigation")
+        print(
+            "\n🔐 Current Node : "
+            "Security Investigation"
+        )
 
-        # ------------------------------------------------------
+    # ------------------------------------------------------
     # Load persistent organization context
     # ------------------------------------------------------
 
-    organization_context = get_organization_context()
+    organization_context = (
+        get_organization_context()
+    )
 
     if settings.LEARN_MODE:
 
-        print("🏢 Organization Context")
+        print(
+            "🏢 Organization Context"
+        )
 
         print(
             f"   Organization   : "
@@ -438,19 +538,30 @@ def security_investigation_node(state):
         )
 
     # ------------------------------------------------------
-    # Find the most recent vulnerability tool response
+    # Find most recent vulnerability tool response
     # ------------------------------------------------------
 
     tool_message = None
 
-    for message in reversed(state["messages"]):
+    for message in reversed(
+        state["messages"]
+    ):
 
-        if getattr(message, "type", None) == "tool":
+        if getattr(
+            message,
+            "type",
+            None,
+        ) == "tool":
 
             if (
-                getattr(message, "name", None)
+                getattr(
+                    message,
+                    "name",
+                    None,
+                )
                 == "vulnerability_lookup"
             ):
+
                 tool_message = message
                 break
 
@@ -461,7 +572,9 @@ def security_investigation_node(state):
     if tool_message is None:
 
         if settings.LEARN_MODE:
-            print("⚠ No vulnerability evidence found.")
+            print(
+                "⚠ No vulnerability evidence found."
+            )
 
         return {
             "investigation": {
@@ -485,6 +598,7 @@ def security_investigation_node(state):
     ) as exc:
 
         if settings.LEARN_MODE:
+
             print(
                 f"❌ Could not parse "
                 f"vulnerability evidence: {exc}"
@@ -501,9 +615,12 @@ def security_investigation_node(state):
     # Check for API error
     # ------------------------------------------------------
 
-    if vulnerability.get("status") == "error":
+    if vulnerability.get(
+        "status"
+    ) == "error":
 
         if settings.LEARN_MODE:
+
             print(
                 "❌ Vulnerability evidence "
                 "contains an API error."
@@ -511,106 +628,111 @@ def security_investigation_node(state):
 
         return {
             "investigation": {
-                "cve_id": vulnerability.get("cve_id"),
+                "cve_id": vulnerability.get(
+                    "cve_id"
+                ),
                 "source": "NVD",
                 "status": "failed",
-                "error": vulnerability.get("error"),
+                "error": vulnerability.get(
+                    "error"
+                ),
             }
         }
 
     # ------------------------------------------------------
-    # Extract evidence
+    # Load organization asset inventory
     # ------------------------------------------------------
 
-    severity = vulnerability.get("severity")
-    cvss_score = vulnerability.get("cvss_score")
+    inventory = get_demo_inventory()
 
     # ------------------------------------------------------
-    # Determine risk assessment
+    # Build the structured investigation record
+    #
+    # All applicability analysis, recommendation generation,
+    # and contextual risk prioritization logic lives in
+    # investigation_engine.build_investigation() -- shared
+    # with the batch (non-interactive) path in batch.py, so
+    # the two cannot silently drift apart.
     # ------------------------------------------------------
 
-    if cvss_score is not None:
+    investigation = build_investigation(
+        vulnerability=vulnerability,
+        inventory=inventory,
+        organization_context=organization_context,
+    )
 
-        if cvss_score >= 9.0:
-            risk_assessment = "CRITICAL"
+    # ------------------------------------------------------
+    # Display applicability result
+    # ------------------------------------------------------
 
-        elif cvss_score >= 7.0:
-            risk_assessment = "HIGH"
+    if settings.LEARN_MODE:
 
-        elif cvss_score >= 4.0:
-            risk_assessment = "MEDIUM"
-
-        else:
-            risk_assessment = "LOW"
-
-    else:
-
-        risk_assessment = (
-            severity.upper()
-            if severity
-            else "UNKNOWN"
+        print(
+            f"\U0001f3e2 Organizational Relevance : "
+            f"{investigation['organizational_relevance']}"
         )
 
-    # ------------------------------------------------------
-    # Build structured investigation state
-    # ------------------------------------------------------
+        print(
+            f"\U0001f4dd Reason                    : "
+            f"{investigation['relevance_reason']}"
+        )
 
-    investigation = {
-    # ------------------------------------------------------
-    # Vulnerability evidence
-    # ------------------------------------------------------
+        print(
+            f"\U0001f3af Applicability Confidence  : "
+            f"{investigation['applicability_confidence']}"
+        )
 
-    "cve_id": vulnerability.get("cve_id"),
-    "severity": severity,
-    "cvss_score": cvss_score,
-    "description": vulnerability.get("description"),
+        if investigation['matched_assets']:
 
-    # ------------------------------------------------------
-    # Evidence provenance
-    # ------------------------------------------------------
+            print(
+                f"\U0001f517 Matched Assets            : "
+                f"{investigation['matched_assets']}"
+            )
 
-    "source": vulnerability.get("source", "NVD"),
+        if investigation['applicability_evidence']:
 
-    # ------------------------------------------------------
-    # Investigation status
-    # ------------------------------------------------------
+            print(
+                "\U0001f4da Applicability Evidence   :"
+            )
 
-    "status": "retrieved",
+            for item in investigation['applicability_evidence']:
 
-    # ------------------------------------------------------
-    # Deterministic risk assessment
-    # ------------------------------------------------------
+                print(
+                    f"   \u2022 {item}"
+                )
 
-    "risk_assessment": risk_assessment,
+        if investigation['missing_evidence']:
 
-    # ------------------------------------------------------
-    # Organization context
-    # ------------------------------------------------------
+            print(
+                "\U0001f50e Missing Evidence          :"
+            )
 
-    "organization_context": organization_context,
+            for item in investigation['missing_evidence']:
 
-    # ------------------------------------------------------
-    # Contextual relevance
-    #
-    # We do NOT claim the CVE affects the organization yet.
-    # That requires evidence.
-    # ------------------------------------------------------
+                print(
+                    f"   \u2022 {item}"
+                )
 
-    "organizational_relevance": "UNKNOWN",
+        print(
+            "\U0001f6e0 Recommended Actions      :"
+        )
 
-    # ------------------------------------------------------
-    # Analysis
-    # ------------------------------------------------------
+        for recommendation in investigation['recommendations']:
 
-    "analysis": (
-        f"The vulnerability is classified as "
-        f"{severity or 'UNKNOWN'} with a CVSS score of "
-        f"{cvss_score if cvss_score is not None else 'N/A'}. "
-        f"The resulting risk assessment is "
-        f"{risk_assessment}. "
-        f"Organizational relevance has not yet been established."
-    ),
-}
+            print(
+                f"   \u2022 {recommendation}"
+            )
+
+        print(
+            f"\U0001f3af Contextual Priority       : "
+            f"{investigation['contextual_priority']['priority_label']} "
+            f"({investigation['contextual_priority']['priority_score']}/100)"
+        )
+
+        print(
+            f"\U0001f4d0 Priority Basis            : "
+            f"{investigation['contextual_priority']['priority_basis']}"
+        )
 
     # ------------------------------------------------------
     # Display investigation result
@@ -634,13 +756,33 @@ def security_investigation_node(state):
         )
 
         print(
+            f"📋 CVSS Version : "
+            f"{investigation['cvss_version']}"
+        )
+
+        print(
+            f"💻 Affected Software : "
+            f"{investigation['affected_software']}"
+        )
+
+        print(
+            f"📦 Affected Versions : "
+            f"{investigation['affected_versions']}"
+        )
+
+        print(
             f"⚠ Risk Level    : "
             f"{investigation['risk_assessment']}"
         )
 
         print(
             f"📚 Evidence     : "
-            f"{investigation['source']}"
+            f"{investigation['evidence']['vulnerability_source']}"
+        )
+
+        print(
+            "🔎 Provenance   : "
+            f"{investigation['evidence']}"
         )
 
         print(
@@ -654,6 +796,304 @@ def security_investigation_node(state):
     return {
         "investigation": investigation
     }
+
+
+# ==========================================================
+# Security Response Builder Node
+# ==========================================================
+
+def security_response_builder_node(state):
+    """
+    Build the final answer directly from the structured
+    investigation state, without an additional LLM call.
+
+    Only reached when the Security Investigation node has
+    just produced a completed, evidence-backed result for
+    the current turn (investigation["status"] == "retrieved").
+
+    Every sentence in the generated response is traceable to
+    a field in the structured investigation state. This node
+    intentionally does not call the LLM, in order to:
+
+    - eliminate the unnecessary second LLM call that was the
+      dominant source of end-to-end latency
+    - guarantee the response cannot contain security facts
+      that are not backed by structured evidence
+    """
+
+    if settings.LEARN_MODE:
+        print(
+            "\n📝 Current Node : "
+            "Security Response Builder"
+        )
+        print(
+            "⚙ Action        : "
+            "Deterministic response (no LLM call)"
+        )
+
+    start = time.perf_counter()
+
+    investigation = state["investigation"]
+
+    # ------------------------------------------------------
+    # Pull structured fields
+    # ------------------------------------------------------
+
+    cve_id = investigation.get(
+        "cve_id",
+        "Unknown CVE"
+    )
+
+    severity = (
+        investigation.get("severity")
+        or "UNKNOWN"
+    ).upper()
+
+    cvss_score = investigation.get(
+        "cvss_score"
+    )
+
+    cvss_version = investigation.get(
+        "cvss_version"
+    )
+
+    affected_software = investigation.get(
+        "affected_software",
+        []
+    )
+
+    affected_versions = investigation.get(
+        "affected_versions",
+        []
+    )
+
+    risk_assessment = investigation.get(
+        "risk_assessment",
+        "UNKNOWN"
+    )
+
+    organizational_relevance = investigation.get(
+        "organizational_relevance",
+        "UNKNOWN"
+    )
+
+    relevance_reason = investigation.get(
+        "relevance_reason",
+        ""
+    )
+
+    matched_assets = investigation.get(
+        "matched_assets",
+        []
+    )
+
+    applicability_confidence = investigation.get(
+        "applicability_confidence"
+    )
+
+    applicability_evidence = investigation.get(
+        "applicability_evidence",
+        []
+    )
+
+    missing_evidence = investigation.get(
+        "missing_evidence",
+        []
+    )
+
+    recommendations = investigation.get(
+        "recommendations",
+        []
+    )
+
+    evidence_source = investigation.get(
+        "evidence",
+        {}
+    ).get(
+        "vulnerability_source",
+        "N/A"
+    )
+
+    contextual_priority = investigation.get(
+        "contextual_priority"
+    )
+
+    # ------------------------------------------------------
+    # "What it is" section
+    # ------------------------------------------------------
+
+    software_str = (
+        ", ".join(affected_software)
+        or "unspecified software"
+    )
+
+    versions_str = ", ".join(
+        affected_versions
+    )
+
+    what_it_is = (
+        f"{cve_id} is a {severity} severity vulnerability "
+        f"affecting {software_str}"
+        + (
+            f" (versions {versions_str})"
+            if versions_str
+            else ""
+        )
+        + "."
+    )
+
+    # ------------------------------------------------------
+    # "Security significance" section
+    # ------------------------------------------------------
+
+    if cvss_score is not None:
+
+        significance = (
+            f"{evidence_source} assigns this vulnerability a "
+            f"CVSS {cvss_version or ''} score of {cvss_score}. "
+            f"Deterministic risk assessment: {risk_assessment}."
+        )
+
+    else:
+
+        significance = (
+            f"No CVSS score is available; severity is reported "
+            f"as {severity}. Deterministic risk assessment: "
+            f"{risk_assessment}."
+        )
+
+    # ------------------------------------------------------
+    # "Organizational relevance" section
+    # ------------------------------------------------------
+
+    org_lines = [
+        f"**{organizational_relevance}** — {relevance_reason}"
+    ]
+
+    if organizational_relevance == "UNKNOWN":
+
+        org_lines.append(
+            "This does not mean the organization is unaffected — "
+            "it means there is not enough evidence to determine "
+            "applicability."
+        )
+
+    for asset in matched_assets:
+
+        org_lines.append(
+            f"- {asset.get('asset_id')}: "
+            f"{asset.get('software')} "
+            f"{asset.get('installed_version')} "
+            f"(criticality: {asset.get('criticality')}, "
+            f"exposure: {asset.get('exposure')})"
+        )
+
+    if applicability_confidence is not None:
+
+        org_lines.append(
+            f"Applicability confidence: "
+            f"{applicability_confidence}"
+        )
+
+    # ------------------------------------------------------
+    # "Evidence" section
+    # ------------------------------------------------------
+
+    evidence_lines = [
+        f"- Vulnerability source: {evidence_source}"
+    ]
+
+    evidence_lines += [
+        f"- {item}"
+        for item in applicability_evidence
+    ]
+
+    if missing_evidence:
+
+        evidence_lines.append("")
+        evidence_lines.append("Missing evidence:")
+
+        evidence_lines += [
+            f"- {item}"
+            for item in missing_evidence
+        ]
+
+    # ------------------------------------------------------
+    # "Contextual priority" section
+    # ------------------------------------------------------
+
+    if contextual_priority:
+
+        priority_section = (
+            f"**{contextual_priority['priority_label']}** "
+            f"({contextual_priority['priority_score']}/100)\n"
+            f"Basis: {contextual_priority['priority_basis']}"
+        )
+
+    else:
+
+        priority_section = "Not calculated."
+
+    # ------------------------------------------------------
+    # "Recommended actions" section
+    # ------------------------------------------------------
+
+    recommendations_section = (
+        "\n".join(
+            f"- {item}"
+            for item in recommendations
+        )
+        if recommendations
+        else "- No specific actions generated."
+    )
+
+    # ------------------------------------------------------
+    # Assemble final response
+    # ------------------------------------------------------
+
+    content = f"""## {cve_id}
+
+### What it is
+{what_it_is}
+
+### Security significance
+{significance}
+
+### Organizational relevance
+{chr(10).join(org_lines)}
+
+### Contextual priority
+{priority_section}
+
+### Evidence
+{chr(10).join(evidence_lines)}
+
+### Recommended actions
+{recommendations_section}
+"""
+
+    end = time.perf_counter()
+
+    if settings.LEARN_MODE:
+
+        print(
+            f"⏱ Response Builder Time: "
+            f"{end - start:.4f} sec"
+        )
+
+        print(
+            "✅ Deterministic response generated."
+        )
+
+    return {
+        "messages": [
+            AIMessage(
+                content=content
+            )
+        ]
+    }
+
+
 # ==========================================================
 # Router
 # ==========================================================
@@ -663,6 +1103,7 @@ def supervisor_router(state):
     route = state["route"]
 
     if route == "memory":
+
         return "memory"
 
     return "assistant"

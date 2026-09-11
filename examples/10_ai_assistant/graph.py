@@ -19,6 +19,7 @@ from agents import (
     memory_node,
     assistant_node,
     security_investigation_node,
+    security_response_builder_node,
     supervisor_router,
 )
 
@@ -47,6 +48,32 @@ def route_after_tools(state):
                 return "security_investigation"
 
             return "assistant"
+
+    return "assistant"
+
+
+# ==========================================================
+# Security Investigation Routing
+# ==========================================================
+
+def route_after_investigation(state):
+    """
+    Decide what to do after Security Investigation.
+
+    A deterministic response is used only when this turn's
+    investigation produced a completed, evidence-backed
+    result (investigation["status"] == "retrieved").
+
+    Anything else — no evidence, unparseable tool output,
+    or an upstream API error — is routed to the Assistant
+    so the LLM can explain the situation in natural language
+    instead of the deterministic builder having to guess.
+    """
+
+    investigation = state.get("investigation") or {}
+
+    if investigation.get("status") == "retrieved":
+        return "security_response_builder"
 
     return "assistant"
 
@@ -85,6 +112,11 @@ builder.add_node(
 builder.add_node(
     "security_investigation",
     security_investigation_node,
+)
+
+builder.add_node(
+    "security_response_builder",
+    security_response_builder_node,
 )
 
 
@@ -129,12 +161,22 @@ builder.add_conditional_edges(
 
 
 # ==========================================================
-# Security Investigation → Assistant
+# Security Investigation → Response Builder / Assistant
+# ==========================================================
+
+builder.add_conditional_edges(
+    "security_investigation",
+    route_after_investigation,
+)
+
+
+# ==========================================================
+# Security Response Builder → END
 # ==========================================================
 
 builder.add_edge(
-    "security_investigation",
-    "assistant",
+    "security_response_builder",
+    END,
 )
 
 
